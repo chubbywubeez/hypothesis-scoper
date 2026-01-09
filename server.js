@@ -438,7 +438,7 @@ app.post('/api/generate-hypothesis', async (req, res) => {
         }
       ],
       temperature: 0.7,
-      max_tokens: 4000,
+      max_completion_tokens: 8000,
       stream: true
     });
 
@@ -495,7 +495,7 @@ app.post('/api/generate-scope', async (req, res) => {
         }
       ],
       temperature: 0.7,
-      max_tokens: 4000,
+      max_completion_tokens: 8000,
       stream: true
     });
 

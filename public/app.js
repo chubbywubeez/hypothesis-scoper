@@ -473,9 +473,6 @@ generateUpdatedHypothesisBtn.addEventListener('click', async () => {
     startProgress('updatedHypothesis', ESTIMATED_TIMES.updatedHypothesis);
     
     try {
-        // Store conversation history before clearing
-        const historyToSend = [...conversationHistory];
-        
         // Prepare output area
         hypothesisOutput.textContent = '';
         
@@ -494,20 +491,14 @@ generateUpdatedHypothesisBtn.addEventListener('click', async () => {
             })
         });
         
-        // Increment version and update badge
-        hypothesisVersion++;
-        updateVersionBadge();
-        
         // Hide update suggestion during generation
         updateSuggestion.style.display = 'none';
         
-        // Clear conversation history after starting the API call
+        // Clear conversation history after starting the API call (version will increment on completion)
+        const historyToSend = [...conversationHistory];
         conversationHistory = [];
         chatMessages.innerHTML = '';
         chatExchangeCount.style.display = 'none';
-        
-        // Show suggestion chips again
-        suggestionChips.style.display = 'flex';
         
         if (!response.ok) {
             throw new Error('Failed to generate updated hypothesis');

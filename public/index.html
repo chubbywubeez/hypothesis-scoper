@@ -54,28 +54,25 @@
                     <div id="hypothesis-output" class="output hypothesis-output"></div>
                 </div>
                 
-                <!-- Right: Chat Section for Iteration -->
+                <!-- Right: Chat Section for Refinement Feedback -->
                 <div class="chat-panel">
                     <div id="chat-section">
                         <div class="chat-header">
-                            <h3>💬 Refine Together</h3>
-                            <span id="chat-exchange-count" class="exchange-count" style="display: none;">0 exchanges</span>
+                            <h3>🔍 Refine Together</h3>
+                            <span class="chat-subtitle">Get feedback & clarifying questions</span>
                         </div>
                         
-                        <!-- Quick Suggestions -->
-                        <div id="suggestion-chips" class="suggestion-chips" style="display: none;">
-                            <button class="suggestion-chip" data-suggestion="Make it more specific">Make it more specific</button>
-                            <button class="suggestion-chip" data-suggestion="Add more detail to the top hypotheses">Add more detail</button>
-                            <button class="suggestion-chip" data-suggestion="Simplify the language">Simplify language</button>
-                            <button class="suggestion-chip" data-suggestion="Focus on the testability">Focus on testability</button>
+                        <div id="chat-messages" class="chat-messages">
+                            <div class="chat-welcome" id="chat-welcome">
+                                <p>I'll help you refine your hypothesis by asking clarifying questions and providing feedback.</p>
+                                <p><strong>Send a message to start, or ask me to identify the top questions that would improve this hypothesis.</strong></p>
+                            </div>
                         </div>
-                        
-                        <div id="chat-messages" class="chat-messages"></div>
                         
                         <div class="chat-input-container">
                             <textarea 
                                 id="chat-input" 
-                                placeholder="Ask questions or share feedback to refine the hypothesis..."
+                                placeholder="Ask for feedback, clarifying questions, or share your thoughts..."
                                 rows="3"
                             ></textarea>
                             <button id="send-chat-btn" class="btn btn-secondary btn-small">
@@ -83,18 +80,28 @@
                             </button>
                         </div>
                         
+                        <!-- Quick Actions -->
+                        <div class="quick-actions">
+                            <button id="ask-questions-btn" class="btn btn-secondary btn-small">
+                                🤔 Ask Top 3 Questions
+                            </button>
+                            <button id="get-feedback-btn" class="btn btn-secondary btn-small">
+                                💡 Get Critical Feedback
+                            </button>
+                        </div>
+                        
                         <!-- Auto-suggest update button (appears after exchanges) -->
                         <div id="update-suggestion" class="update-suggestion" style="display: none;">
                             <div class="update-suggestion-content">
-                                <span id="update-suggestion-text">Based on <span id="exchange-count">0</span> exchange(s), ready to apply changes?</span>
+                                <span id="update-suggestion-text">Based on our discussion, ready to update the hypothesis?</span>
                                 <button id="generate-updated-hypothesis-btn" class="btn btn-primary btn-small">
-                                    ✓ Apply Changes
+                                    ✓ Update Hypothesis
                                 </button>
                             </div>
                         </div>
                         
                         <div id="updated-hypothesis-loading" class="loading-container" style="display: none;">
-                            <div class="loading-text">Applying changes...</div>
+                            <div class="loading-text">Updating hypothesis...</div>
                             <div class="progress-bar-container">
                                 <div id="updated-hypothesis-progress-bar" class="progress-bar"></div>
                             </div>

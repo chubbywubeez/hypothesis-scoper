@@ -55,10 +55,11 @@ const sendChatBtn = document.getElementById('send-chat-btn');
 const generateUpdatedHypothesisBtn = document.getElementById('generate-updated-hypothesis-btn');
 const updatedHypothesisLoading = document.getElementById('updated-hypothesis-loading');
 const hypothesisVersionBadge = document.getElementById('hypothesis-version');
-const suggestionChips = document.getElementById('suggestion-chips');
 const updateSuggestion = document.getElementById('update-suggestion');
 const exchangeCountDisplay = document.getElementById('exchange-count');
-const chatExchangeCount = document.getElementById('chat-exchange-count');
+const chatWelcome = document.getElementById('chat-welcome');
+const askQuestionsBtn = document.getElementById('ask-questions-btn');
+const getFeedbackBtn = document.getElementById('get-feedback-btn');
 
 // Progress bar helper functions
 function startProgress(type, estimatedTime) {
@@ -208,9 +209,11 @@ generateHypothesisBtn.addEventListener('click', async () => {
                             chatMessages.innerHTML = '';
                             hypothesisVersion = 1;
                             updateVersionBadge();
-                            suggestionChips.style.display = 'flex';
                             updateSuggestion.style.display = 'none';
-                            chatExchangeCount.style.display = 'none';
+                            // Re-add welcome message
+                            if (chatWelcome) {
+                                chatMessages.appendChild(chatWelcome.cloneNode(true));
+                            }
                             
                             setTimeout(() => {
                                 hypothesisLoading.style.display = 'none';
@@ -398,12 +401,15 @@ function showSuccess() {
     }, 2000);
 }
 
-// Send chat message
-sendChatBtn.addEventListener('click', async () => {
-    const message = chatInput.value.trim();
-    
-    if (!message) {
+// Helper function to send chat message
+async function sendChatMessage(message) {
+    if (!message || message.trim().length === 0) {
         return;
+    }
+    
+    // Hide welcome message if present
+    if (chatWelcome && chatWelcome.parentNode) {
+        chatWelcome.style.display = 'none';
     }
     
     // Add user message to conversation
@@ -411,15 +417,14 @@ sendChatBtn.addEventListener('click', async () => {
     addChatMessage('user', message);
     chatInput.value = '';
     
-    // Hide suggestion chips after first message
-    suggestionChips.style.display = 'none';
-    
     // Disable input while processing
     sendChatBtn.disabled = true;
     chatInput.disabled = true;
+    if (askQuestionsBtn) askQuestionsBtn.disabled = true;
+    if (getFeedbackBtn) getFeedbackBtn.disabled = true;
     
     try {
-        // Call chat API
+        // Call chat API with conversation history
         const response = await fetch('/api/chat', {
             method: 'POST',
             headers: {
@@ -428,7 +433,8 @@ sendChatBtn.addEventListener('click', async () => {
             body: JSON.stringify({
                 message,
                 idea: originalIdea,
-                hypothesis: hypothesisOutput.textContent.trim()
+                hypothesis: hypothesisOutput.textContent.trim(),
+                conversation: conversationHistory.slice(0, -1) // Send previous conversation, not current message
             })
         });
         
@@ -440,11 +446,10 @@ sendChatBtn.addEventListener('click', async () => {
         
         // Add assistant response to conversation
         conversationHistory.push({ role: 'assistant', content: data.response });
-        addChatMessage('assistant', data.response);
+        addChatMessage('assistant', data.response, 'critic');
         
-        // Update exchange count and show update suggestion
-        updateExchangeCount();
-        if (conversationHistory.length >= 2) {
+        // Show update suggestion after meaningful exchanges
+        if (conversationHistory.length >= 4) { // At least 2 exchanges (user + assistant each)
             updateSuggestion.style.display = 'block';
         }
         
@@ -453,9 +458,33 @@ sendChatBtn.addEventListener('click', async () => {
     } finally {
         sendChatBtn.disabled = false;
         chatInput.disabled = false;
+        if (askQuestionsBtn) askQuestionsBtn.disabled = false;
+        if (getFeedbackBtn) getFeedbackBtn.disabled = false;
         chatInput.focus();
     }
+}
+
+// Send chat message
+sendChatBtn.addEventListener('click', async () => {
+    const message = chatInput.value.trim();
+    await sendChatMessage(message);
 });
+
+// Quick action: Ask top 3 questions
+if (askQuestionsBtn) {
+    askQuestionsBtn.addEventListener('click', async () => {
+        const message = 'What are the 3 highest-value follow-up questions you could ask to 10x the quality of this hypothesis? Focus on assumptions, missing context, or clarifying leaps that would strengthen testability.';
+        await sendChatMessage(message);
+    });
+}
+
+// Quick action: Get critical feedback
+if (getFeedbackBtn) {
+    getFeedbackBtn.addEventListener('click', async () => {
+        const message = 'Provide critical feedback on this hypothesis. Be brutally honest about assumptions, leaps in logic, and missing information. What would strengthen this hypothesis?';
+        await sendChatMessage(message);
+    });
+}
 
 // Generate updated hypothesis with conversation history
 generateUpdatedHypothesisBtn.addEventListener('click', async () => {
@@ -560,13 +589,13 @@ generateUpdatedHypothesisBtn.addEventListener('click', async () => {
 });
 
 // Add chat message to UI
-function addChatMessage(role, content) {
+function addChatMessage(role, content, roleLabel = null) {
     const messageDiv = document.createElement('div');
     messageDiv.className = `chat-message ${role}`;
     
     const roleDiv = document.createElement('div');
     roleDiv.className = 'role';
-    roleDiv.textContent = role === 'user' ? 'You' : 'Assistant';
+    roleDiv.textContent = role === 'user' ? 'You' : (roleLabel === 'critic' ? 'Critic' : 'Assistant');
     
     const contentDiv = document.createElement('div');
     contentDiv.className = 'content';
@@ -587,31 +616,6 @@ function updateVersionBadge() {
     }
 }
 
-// Update exchange count display
-function updateExchangeCount() {
-    const exchangeCount = conversationHistory.filter(msg => msg.role === 'user').length;
-    if (exchangeCountDisplay) {
-        exchangeCountDisplay.textContent = exchangeCount;
-    }
-    if (chatExchangeCount) {
-        chatExchangeCount.textContent = `${exchangeCount} exchange${exchangeCount !== 1 ? 's' : ''}`;
-        chatExchangeCount.style.display = 'inline-block';
-    }
-}
-
-// Handle suggestion chip clicks
-document.addEventListener('DOMContentLoaded', () => {
-    const chips = document.querySelectorAll('.suggestion-chip');
-    chips.forEach(chip => {
-        chip.addEventListener('click', () => {
-            const suggestion = chip.getAttribute('data-suggestion');
-            if (chatInput) {
-                chatInput.value = suggestion;
-                chatInput.focus();
-            }
-        });
-    });
-});
 
 // Allow Enter key to send chat (Ctrl/Cmd + Enter for newline)
 chatInput.addEventListener('keydown', (e) => {

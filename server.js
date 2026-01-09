@@ -14,6 +14,13 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static('public'));
 
+// Check for required environment variable
+if (!process.env.OPENAI_API_KEY) {
+  console.error('ERROR: OPENAI_API_KEY environment variable is not set!');
+  console.error('Please add OPENAI_API_KEY to your Railway environment variables.');
+  process.exit(1);
+}
+
 // Initialize OpenAI client
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY

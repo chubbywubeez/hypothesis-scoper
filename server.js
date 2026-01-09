@@ -18,6 +18,7 @@ app.use(express.static('public'));
 if (!process.env.OPENAI_API_KEY) {
   console.error('ERROR: OPENAI_API_KEY environment variable is not set!');
   console.error('Please add OPENAI_API_KEY to your Railway environment variables.');
+  console.error('Debug: All env vars:', Object.keys(process.env).filter(k => k.includes('OPENAI')).join(', ') || 'None found');
   process.exit(1);
 }
 

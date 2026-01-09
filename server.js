@@ -430,7 +430,7 @@ app.post('/api/generate-hypothesis', async (req, res) => {
 
     // Call OpenAI API with streaming
     const stream = await openai.chat.completions.create({
-      model: 'gpt-4',
+      model: 'gpt-4o',
       messages: [
         {
           role: 'user',
@@ -493,7 +493,7 @@ app.post('/api/generate-updated-hypothesis', async (req, res) => {
 
     // Call OpenAI API with streaming
     const stream = await openai.chat.completions.create({
-      model: 'gpt-4',
+      model: 'gpt-4o',
       messages: [
         {
           role: 'user',
@@ -541,7 +541,7 @@ app.post('/api/chat', async (req, res) => {
 
     // Call OpenAI API
     const completion = await openai.chat.completions.create({
-      model: 'gpt-4',
+      model: 'gpt-4o',
       messages: [
         {
           role: 'user',
@@ -591,7 +591,7 @@ app.post('/api/generate-scope', async (req, res) => {
 
     // Call OpenAI API with streaming
     const stream = await openai.chat.completions.create({
-      model: 'gpt-4',
+      model: 'gpt-4o',
       messages: [
         {
           role: 'user',

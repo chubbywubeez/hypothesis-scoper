@@ -5,6 +5,8 @@
 let originalIdea = '';
 // Store conversation history for chat iteration
 let conversationHistory = [];
+// Track hypothesis version/draft number
+let hypothesisVersion = 1;
 
 // Progress tracking for loading bars
 let progressInterval = null;
@@ -52,6 +54,11 @@ const chatInput = document.getElementById('chat-input');
 const sendChatBtn = document.getElementById('send-chat-btn');
 const generateUpdatedHypothesisBtn = document.getElementById('generate-updated-hypothesis-btn');
 const updatedHypothesisLoading = document.getElementById('updated-hypothesis-loading');
+const hypothesisVersionBadge = document.getElementById('hypothesis-version');
+const suggestionChips = document.getElementById('suggestion-chips');
+const updateSuggestion = document.getElementById('update-suggestion');
+const exchangeCountDisplay = document.getElementById('exchange-count');
+const chatExchangeCount = document.getElementById('chat-exchange-count');
 
 // Progress bar helper functions
 function startProgress(type, estimatedTime) {
@@ -195,6 +202,16 @@ generateHypothesisBtn.addEventListener('click', async () => {
                             // Stop progress and complete
                             stopProgress();
                             generateHypothesisBtn.disabled = false;
+                            
+                            // Reset conversation and show UI elements
+                            conversationHistory = [];
+                            chatMessages.innerHTML = '';
+                            hypothesisVersion = 1;
+                            updateVersionBadge();
+                            suggestionChips.style.display = 'flex';
+                            updateSuggestion.style.display = 'none';
+                            chatExchangeCount.style.display = 'none';
+                            
                             setTimeout(() => {
                                 hypothesisLoading.style.display = 'none';
                             }, 500);
@@ -394,6 +411,9 @@ sendChatBtn.addEventListener('click', async () => {
     addChatMessage('user', message);
     chatInput.value = '';
     
+    // Hide suggestion chips after first message
+    suggestionChips.style.display = 'none';
+    
     // Disable input while processing
     sendChatBtn.disabled = true;
     chatInput.disabled = true;
@@ -421,6 +441,12 @@ sendChatBtn.addEventListener('click', async () => {
         // Add assistant response to conversation
         conversationHistory.push({ role: 'assistant', content: data.response });
         addChatMessage('assistant', data.response);
+        
+        // Update exchange count and show update suggestion
+        updateExchangeCount();
+        if (conversationHistory.length >= 2) {
+            updateSuggestion.style.display = 'block';
+        }
         
     } catch (error) {
         showError(`Error: ${error.message}`);
@@ -468,9 +494,20 @@ generateUpdatedHypothesisBtn.addEventListener('click', async () => {
             })
         });
         
+        // Increment version and update badge
+        hypothesisVersion++;
+        updateVersionBadge();
+        
+        // Hide update suggestion during generation
+        updateSuggestion.style.display = 'none';
+        
         // Clear conversation history after starting the API call
         conversationHistory = [];
         chatMessages.innerHTML = '';
+        chatExchangeCount.style.display = 'none';
+        
+        // Show suggestion chips again
+        suggestionChips.style.display = 'flex';
         
         if (!response.ok) {
             throw new Error('Failed to generate updated hypothesis');
@@ -551,6 +588,39 @@ function addChatMessage(role, content) {
     // Scroll to bottom
     chatMessages.scrollTop = chatMessages.scrollHeight;
 }
+
+// Update version badge
+function updateVersionBadge() {
+    if (hypothesisVersionBadge) {
+        hypothesisVersionBadge.textContent = `Draft v${hypothesisVersion}`;
+    }
+}
+
+// Update exchange count display
+function updateExchangeCount() {
+    const exchangeCount = conversationHistory.filter(msg => msg.role === 'user').length;
+    if (exchangeCountDisplay) {
+        exchangeCountDisplay.textContent = exchangeCount;
+    }
+    if (chatExchangeCount) {
+        chatExchangeCount.textContent = `${exchangeCount} exchange${exchangeCount !== 1 ? 's' : ''}`;
+        chatExchangeCount.style.display = 'inline-block';
+    }
+}
+
+// Handle suggestion chip clicks
+document.addEventListener('DOMContentLoaded', () => {
+    const chips = document.querySelectorAll('.suggestion-chip');
+    chips.forEach(chip => {
+        chip.addEventListener('click', () => {
+            const suggestion = chip.getAttribute('data-suggestion');
+            if (chatInput) {
+                chatInput.value = suggestion;
+                chatInput.focus();
+            }
+        });
+    });
+});
 
 // Allow Enter key to send chat (Ctrl/Cmd + Enter for newline)
 chatInput.addEventListener('keydown', (e) => {

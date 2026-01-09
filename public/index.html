@@ -36,48 +36,82 @@
             </div>
         </section>
 
-        <!-- Step 2: Hypothesis Output -->
+        <!-- Step 2: Hypothesis Output with Side-by-Side Layout -->
         <section class="card" id="hypothesis-section" style="display: none;">
             <div class="section-header">
-                <h2>2. Generated Hypothesis</h2>
+                <div class="header-left">
+                    <h2>2. Your Hypothesis</h2>
+                    <span id="hypothesis-version" class="version-badge">Draft v1</span>
+                </div>
                 <button id="copy-hypothesis-btn" class="btn btn-secondary btn-small">
                     Copy to Clipboard
                 </button>
             </div>
-            <div id="hypothesis-output" class="output"></div>
             
-            <!-- Chat Section for Iteration -->
-            <div id="chat-section" style="display: none;">
-                <h3>Iterate on Hypothesis</h3>
-                <div id="chat-messages" class="chat-messages"></div>
-                <div class="chat-input-container">
-                    <textarea 
-                        id="chat-input" 
-                        placeholder="Ask questions or provide feedback to refine the hypothesis..."
-                        rows="3"
-                    ></textarea>
-                    <button id="send-chat-btn" class="btn btn-secondary btn-small">
-                        Send
-                    </button>
+            <div class="hypothesis-layout">
+                <!-- Left: Hypothesis Output -->
+                <div class="hypothesis-panel">
+                    <div id="hypothesis-output" class="output hypothesis-output"></div>
                 </div>
-                <button id="generate-updated-hypothesis-btn" class="btn btn-primary btn-spacing">
-                    Generate Updated Hypothesis
-                </button>
-                <div id="updated-hypothesis-loading" class="loading-container" style="display: none;">
-                    <div class="loading-text">Generating updated hypothesis...</div>
-                    <div class="progress-bar-container">
-                        <div id="updated-hypothesis-progress-bar" class="progress-bar"></div>
-                    </div>
-                    <div class="time-estimate">
-                        <span id="updated-hypothesis-time-elapsed">0s</span> elapsed
-                        <span id="updated-hypothesis-time-estimate" class="estimate-text"></span>
+                
+                <!-- Right: Chat Section for Iteration -->
+                <div class="chat-panel">
+                    <div id="chat-section">
+                        <div class="chat-header">
+                            <h3>💬 Refine Together</h3>
+                            <span id="chat-exchange-count" class="exchange-count" style="display: none;">0 exchanges</span>
+                        </div>
+                        
+                        <!-- Quick Suggestions -->
+                        <div id="suggestion-chips" class="suggestion-chips" style="display: none;">
+                            <button class="suggestion-chip" data-suggestion="Make it more specific">Make it more specific</button>
+                            <button class="suggestion-chip" data-suggestion="Add more detail to the top hypotheses">Add more detail</button>
+                            <button class="suggestion-chip" data-suggestion="Simplify the language">Simplify language</button>
+                            <button class="suggestion-chip" data-suggestion="Focus on the testability">Focus on testability</button>
+                        </div>
+                        
+                        <div id="chat-messages" class="chat-messages"></div>
+                        
+                        <div class="chat-input-container">
+                            <textarea 
+                                id="chat-input" 
+                                placeholder="Ask questions or share feedback to refine the hypothesis..."
+                                rows="3"
+                            ></textarea>
+                            <button id="send-chat-btn" class="btn btn-secondary btn-small">
+                                Send
+                            </button>
+                        </div>
+                        
+                        <!-- Auto-suggest update button (appears after exchanges) -->
+                        <div id="update-suggestion" class="update-suggestion" style="display: none;">
+                            <div class="update-suggestion-content">
+                                <span id="update-suggestion-text">Based on <span id="exchange-count">0</span> exchange(s), ready to apply changes?</span>
+                                <button id="generate-updated-hypothesis-btn" class="btn btn-primary btn-small">
+                                    ✓ Apply Changes
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <div id="updated-hypothesis-loading" class="loading-container" style="display: none;">
+                            <div class="loading-text">Applying changes...</div>
+                            <div class="progress-bar-container">
+                                <div id="updated-hypothesis-progress-bar" class="progress-bar"></div>
+                            </div>
+                            <div class="time-estimate">
+                                <span id="updated-hypothesis-time-elapsed">0s</span> elapsed
+                                <span id="updated-hypothesis-time-estimate" class="estimate-text"></span>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
             
-            <button id="generate-scope-btn" class="btn btn-primary btn-spacing">
-                Generate Scope
-            </button>
+            <div class="action-buttons">
+                <button id="generate-scope-btn" class="btn btn-primary btn-spacing">
+                    Generate Scope
+                </button>
+            </div>
             <div id="scope-loading" class="loading-container" style="display: none;">
                 <div class="loading-text">Generating scope...</div>
                 <div class="progress-bar-container">

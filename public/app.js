@@ -699,56 +699,6 @@ async function generateWelcomeMessage(hypothesis) {
 }
 
 
-// Chat panel collapse/expand functionality
-function toggleChatPanel() {
-    // Get hypothesis layout element if not set
-    if (!hypothesisLayout) {
-        hypothesisLayout = document.querySelector('.hypothesis-layout');
-    }
-    
-    if (chatPanel && hypothesisLayout) {
-        chatPanel.classList.toggle('collapsed');
-        hypothesisLayout.classList.toggle('chat-collapsed');
-        
-        // Save state to localStorage
-        const isCollapsed = chatPanel.classList.contains('collapsed');
-        localStorage.setItem('chatPanelCollapsed', isCollapsed.toString());
-    }
-}
-
-// Initialize chat panel state (default to collapsed)
-function initChatPanelState() {
-    // Get hypothesis layout element
-    if (!hypothesisLayout) {
-        hypothesisLayout = document.querySelector('.hypothesis-layout');
-    }
-    
-    if (chatPanel && hypothesisLayout) {
-        // Check localStorage or default to collapsed
-        const savedState = localStorage.getItem('chatPanelCollapsed');
-        const shouldCollapse = savedState === null ? true : savedState === 'true';
-        
-        if (shouldCollapse) {
-            chatPanel.classList.add('collapsed');
-            hypothesisLayout.classList.add('chat-collapsed');
-        }
-    }
-}
-
-// Set up toggle buttons
-if (chatToggleBtn) {
-    chatToggleBtn.addEventListener('click', toggleChatPanel);
-}
-
-if (chatCloseBtn) {
-    chatCloseBtn.addEventListener('click', toggleChatPanel);
-}
-
-// Initialize on page load
-document.addEventListener('DOMContentLoaded', () => {
-    initChatPanelState();
-});
-
 // Allow Enter key to send chat (Ctrl/Cmd + Enter for newline)
 if (chatInput) {
     chatInput.addEventListener('keydown', (e) => {

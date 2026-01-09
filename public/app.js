@@ -33,7 +33,6 @@ const successNotification = document.getElementById('success-notification');
 const advancedModeBtn = document.getElementById('advanced-mode-btn');
 const advancedModal = document.getElementById('advanced-modal');
 const closeAdvancedModal = document.getElementById('close-advanced-modal');
-const cancelAdvancedBtn = document.getElementById('cancel-advanced-btn');
 const generateFromAdvancedBtn = document.getElementById('generate-from-advanced-btn');
 const advancedChatMessages = document.getElementById('advanced-chat-messages');
 const advancedChatInput = document.getElementById('advanced-chat-input');
@@ -174,9 +173,18 @@ generateHypothesisBtn.addEventListener('click', async () => {
                         
                         if (data.content) {
                             fullText += data.content;
+                            // Check if user is near bottom before scrolling (within 50px)
+                            const isNearBottom = hypothesisOutput.scrollHeight - hypothesisOutput.scrollTop - hypothesisOutput.clientHeight < 50;
+                            
                             hypothesisOutput.textContent = fullText;
-                            // Auto-scroll to bottom as text streams in
-                            hypothesisOutput.scrollTop = hypothesisOutput.scrollHeight;
+                            
+                            // Only auto-scroll if user was near bottom
+                            if (isNearBottom) {
+                                // Use requestAnimationFrame for smoother scrolling
+                                requestAnimationFrame(() => {
+                                    hypothesisOutput.scrollTop = hypothesisOutput.scrollHeight;
+                                });
+                            }
                         }
                         
                         if (data.done) {
@@ -272,9 +280,18 @@ generateScopeBtn.addEventListener('click', async () => {
                         
                         if (data.content) {
                             fullText += data.content;
+                            // Check if user is near bottom before scrolling (within 50px)
+                            const isNearBottom = scopeOutput.scrollHeight - scopeOutput.scrollTop - scopeOutput.clientHeight < 50;
+                            
                             scopeOutput.textContent = fullText;
-                            // Auto-scroll to bottom as text streams in
-                            scopeOutput.scrollTop = scopeOutput.scrollHeight;
+                            
+                            // Only auto-scroll if user was near bottom
+                            if (isNearBottom) {
+                                // Use requestAnimationFrame for smoother scrolling
+                                requestAnimationFrame(() => {
+                                    scopeOutput.scrollTop = scopeOutput.scrollHeight;
+                                });
+                            }
                         }
                         
                         if (data.done) {
@@ -384,10 +401,6 @@ advancedModeBtn.addEventListener('click', () => {
 });
 
 closeAdvancedModal.addEventListener('click', () => {
-    closeAdvancedModalFunc();
-});
-
-cancelAdvancedBtn.addEventListener('click', () => {
     closeAdvancedModalFunc();
 });
 
@@ -616,7 +629,10 @@ generateFromAdvancedBtn.addEventListener('click', async () => {
         return;
     }
     
-    // Close modal first
+    // Store conversation history BEFORE closing modal (since closeAdvancedModalFunc clears it)
+    const conversationToUse = [...advancedConversationHistory];
+    
+    // Close modal
     closeAdvancedModalFunc();
     
     // Show loading state
@@ -636,14 +652,14 @@ generateFromAdvancedBtn.addEventListener('click', async () => {
         // Scroll to hypothesis section
         hypothesisSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
         
-        // Call API with conversation history
+        // Call API with conversation history (using the stored copy)
         const response = await fetch('/api/generate-hypothesis-advanced', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                conversation: advancedConversationHistory
+                conversation: conversationToUse
             })
         });
         
@@ -651,8 +667,8 @@ generateFromAdvancedBtn.addEventListener('click', async () => {
             throw new Error('Failed to generate hypothesis');
         }
         
-        // Store conversation as original idea for scope generation
-        originalIdea = advancedConversationHistory.map(msg => `${msg.role === 'user' ? 'User' : 'Assistant'}: ${msg.content}`).join('\n\n');
+        // Store conversation as original idea for scope generation (using the stored copy)
+        originalIdea = conversationToUse.map(msg => `${msg.role === 'user' ? 'User' : 'Assistant'}: ${msg.content}`).join('\n\n');
         
         // Handle streaming response
         const reader = response.body.getReader();
@@ -680,8 +696,18 @@ generateFromAdvancedBtn.addEventListener('click', async () => {
                         
                         if (data.content) {
                             fullText += data.content;
+                            // Check if user is near bottom before scrolling (within 50px)
+                            const isNearBottom = hypothesisOutput.scrollHeight - hypothesisOutput.scrollTop - hypothesisOutput.clientHeight < 50;
+                            
                             hypothesisOutput.textContent = fullText;
-                            hypothesisOutput.scrollTop = hypothesisOutput.scrollHeight;
+                            
+                            // Only auto-scroll if user was near bottom
+                            if (isNearBottom) {
+                                // Use requestAnimationFrame for smoother scrolling
+                                requestAnimationFrame(() => {
+                                    hypothesisOutput.scrollTop = hypothesisOutput.scrollHeight;
+                                });
+                            }
                         }
                         
                         if (data.done) {

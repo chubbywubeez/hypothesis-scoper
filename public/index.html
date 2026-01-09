@@ -105,11 +105,16 @@
             </div>
             <div id="advanced-chat-messages" class="advanced-chat-messages"></div>
             <div class="advanced-chat-input-container">
-                <textarea id="advanced-chat-input" class="advanced-chat-input" placeholder="Tell me about your idea..." rows="2"></textarea>
-                <button id="advanced-send-btn" class="btn btn-primary advanced-send-btn">Send</button>
+                <div class="advanced-input-wrapper">
+                    <textarea id="advanced-chat-input" class="advanced-chat-input" placeholder="Tell me about your idea..." rows="2"></textarea>
+                    <button id="advanced-send-btn" class="advanced-send-btn" title="Send">
+                        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M10 3L10 17M10 3L3 10M10 3L17 10" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                    </button>
+                </div>
             </div>
             <div class="advanced-modal-footer">
-                <button id="cancel-advanced-btn" class="btn btn-secondary">Cancel</button>
                 <button id="generate-from-advanced-btn" class="btn btn-primary" disabled>Generate Hypothesis</button>
             </div>
         </div>

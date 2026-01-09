@@ -6,12 +6,21 @@
     box-sizing: border-box;
 }
 
+html {
+    overflow-x: hidden;
+    width: 100%;
+    position: relative;
+}
+
 body {
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
     background-color: #0A0E17; /* Vantum Midnight Black */
     color: #FFFFFF; /* Vantum White */
     line-height: 1.6;
     padding: 20px;
+    overflow-x: hidden;
+    width: 100%;
+    position: relative;
 }
 
 /* Mobile-first responsive padding */
@@ -24,6 +33,9 @@ body {
 .container {
     max-width: 900px;
     margin: 0 auto;
+    width: 100%;
+    overflow-x: hidden;
+    position: relative;
 }
 
 header {
@@ -82,6 +94,9 @@ header h1 {
     padding: 30px;
     margin-bottom: 30px;
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    overflow-x: hidden;
+    width: 100%;
+    max-width: 100%;
 }
 
 @media (max-width: 768px) {
@@ -134,6 +149,7 @@ header h1 {
 
 textarea {
     width: 100%;
+    max-width: 100%;
     padding: 15px;
     border: 2px solid #A3A6B4; /* Vantum Light Gray border */
     border-radius: 4px;
@@ -143,6 +159,8 @@ textarea {
     margin-bottom: 15px;
     background-color: #0A0E17; /* Vantum Midnight Black */
     color: #FFFFFF; /* White text */
+    overflow-x: hidden;
+    box-sizing: border-box;
 }
 
 textarea:focus {
@@ -231,10 +249,13 @@ textarea:focus {
     line-height: 1.6;
     max-height: 600px;
     overflow-y: auto;
+    overflow-x: hidden;
     margin-bottom: 15px;
     word-wrap: break-word;
-    overflow-x: auto;
     color: #FFFFFF; /* White text */
+    /* Prevent jitter during streaming */
+    contain: layout style;
+    will-change: scroll-position;
 }
 
 @media (max-width: 768px) {
@@ -397,9 +418,18 @@ textarea:focus {
     font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
     font-size: 14px;
     line-height: 1.7;
-    max-height: none;
+    max-height: 600px;
+    overflow-y: auto;
+    overflow-x: hidden;
     box-shadow: 0 1px 3px rgba(0,0,0,0.1);
     transition: border-color 0.3s;
+    cursor: text;
+    min-height: 400px;
+    /* Prevent jitter during streaming */
+    contain: layout style;
+    will-change: scroll-position;
+    word-wrap: break-word;
+    word-break: break-word;
 }
 
 .hypothesis-output:focus-within {
@@ -407,17 +437,12 @@ textarea:focus {
     outline: none;
 }
 
-/* Make hypothesis feel more like a document/canvas */
-.hypothesis-output {
-    cursor: text;
-    min-height: 400px;
-}
-
 @media (max-width: 768px) {
     .hypothesis-output {
         padding: 20px;
         font-size: 13px;
         min-height: 300px;
+        max-height: 500px;
     }
 }
 
@@ -574,20 +599,23 @@ textarea:focus {
 
 /* Chat input container - fixed at bottom */
 .advanced-chat-input-container {
-    display: flex;
-    gap: 12px;
     padding: 20px 30px;
     border-top: 1px solid #2A2E39;
     background-color: #1A1E29;
-    align-items: flex-end;
     max-width: 900px;
     width: 100%;
     margin: 0 auto;
 }
 
+.advanced-input-wrapper {
+    position: relative;
+    display: flex;
+    align-items: flex-end;
+}
+
 .advanced-chat-input {
     flex: 1;
-    padding: 14px 18px;
+    padding: 14px 50px 14px 18px;
     border: 1px solid #2A2E39;
     border-radius: 12px;
     font-size: 15px;
@@ -598,6 +626,7 @@ textarea:focus {
     min-height: 52px;
     max-height: 200px;
     line-height: 1.5;
+    width: 100%;
 }
 
 .advanced-chat-input:focus {
@@ -606,15 +635,42 @@ textarea:focus {
 }
 
 .advanced-send-btn {
-    padding: 14px 28px;
-    min-width: 90px;
-    height: 52px;
-    border-radius: 12px;
+    position: absolute;
+    right: 8px;
+    bottom: 8px;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background-color: #007A7A;
+    color: #FFFFFF;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background-color 0.2s, transform 0.1s;
+    padding: 0;
+    z-index: 10;
+}
+
+.advanced-send-btn:hover:not(:disabled) {
+    background-color: #006666;
+    transform: scale(1.05);
+}
+
+.advanced-send-btn:active:not(:disabled) {
+    transform: scale(0.95);
 }
 
 .advanced-send-btn:disabled {
     opacity: 0.5;
     cursor: not-allowed;
+    background-color: #95a5a6;
+}
+
+.advanced-send-btn svg {
+    width: 18px;
+    height: 18px;
 }
 
 /* Modal footer with action buttons */
@@ -631,7 +687,7 @@ textarea:focus {
 }
 
 .advanced-modal-footer .btn {
-    min-width: 140px;
+    min-width: 180px;
 }
 
 /* Scrollbar for chat messages */
@@ -663,12 +719,13 @@ textarea:focus {
     
     .advanced-chat-input-container {
         padding: 15px 20px;
-        flex-direction: column;
-        align-items: stretch;
     }
     
     .advanced-send-btn {
-        width: 100%;
+        width: 32px;
+        height: 32px;
+        right: 6px;
+        bottom: 6px;
     }
     
     .advanced-modal-footer {

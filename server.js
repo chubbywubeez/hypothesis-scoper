@@ -523,21 +523,54 @@ app.post('/api/generate-updated-hypothesis', async (req, res) => {
   }
 });
 
-// API endpoint: Chat response (for iteration)
+// Chat prompt for hypothesis refinement feedback
+const REFINEMENT_CHAT_PROMPT = `You are a Senior Product Manager and Hypothesis Critic specializing in first-principles thinking and rigorous hypothesis validation.
+
+Your role is to help refine product hypotheses by:
+- Being brutally honest about assumptions and leaps in logic
+- Identifying missing information that would strengthen the hypothesis
+- Asking high-value clarifying questions that reveal blind spots
+- Focusing on what would 10x the quality and testability of the hypothesis
+
+Remember: The goal is NOT to stump the user, but to find clarifying leaps in assumptions or missing follow-up thoughts that will increase the chance the hypothesis will accomplish the user's overall intention (brain dump → hypothesis → scope).
+
+Be constructive but direct. Challenge assumptions. Surface gaps.
+
+Context:
+- Original Idea/Brain Dump: {IDEA_PLACEHOLDER}
+- Current Hypothesis: {HYPOTHESIS_PLACEHOLDER}
+- Conversation History: {CONVERSATION_PLACEHOLDER}
+- User's Current Message: {MESSAGE_PLACEHOLDER}
+
+Provide your response. If this is the first message, start by identifying the 3 highest-value follow-up questions you could ask to 10x the quality of this hypothesis. Focus on assumptions, missing context, or clarifying leaps that would strengthen testability and execution.`;
+
+// API endpoint: Chat response (for refinement and feedback)
 app.post('/api/chat', async (req, res) => {
   try {
-    const { message, idea, hypothesis } = req.body;
+    const { message, idea, hypothesis, conversation } = req.body;
 
     if (!message || message.trim().length === 0) {
       return res.status(400).json({ error: 'Message is required' });
     }
 
-    // Build context for the chat
-    const chatContext = `You are helping refine a product hypothesis. Here's the original idea and current hypothesis:\n\n` +
-      `Original Idea:\n${idea || 'Not provided'}\n\n` +
-      `Current Hypothesis:\n${hypothesis || 'Not provided'}\n\n` +
-      `User's question/feedback:\n${message.trim()}\n\n` +
-      `Please provide a helpful, concise response to help refine the hypothesis.`;
+    if (!hypothesis || hypothesis.trim().length === 0) {
+      return res.status(400).json({ error: 'Hypothesis is required for feedback' });
+    }
+
+    // Build conversation history context
+    let conversationContext = 'No previous conversation.';
+    if (conversation && Array.isArray(conversation) && conversation.length > 0) {
+      conversationContext = conversation.map(msg => 
+        `${msg.role === 'user' ? 'User' : 'Critic'}: ${msg.content}`
+      ).join('\n\n');
+    }
+
+    // Build the refinement prompt
+    let fullPrompt = REFINEMENT_CHAT_PROMPT
+      .replace('{IDEA_PLACEHOLDER}', idea || 'Not provided')
+      .replace('{HYPOTHESIS_PLACEHOLDER}', hypothesis.trim())
+      .replace('{CONVERSATION_PLACEHOLDER}', conversationContext)
+      .replace('{MESSAGE_PLACEHOLDER}', message.trim());
 
     // Call OpenAI API
     const completion = await openai.chat.completions.create({
@@ -545,7 +578,7 @@ app.post('/api/chat', async (req, res) => {
       messages: [
         {
           role: 'user',
-          content: chatContext
+          content: fullPrompt
         }
       ],
       temperature: 0.7,

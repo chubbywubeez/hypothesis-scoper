@@ -410,7 +410,7 @@ Paste feature/system context here:
 (Optional) Hypotheses (IDs only or snapshot):
 {HYPOTHESIS_PLACEHOLDER}`;
 
-// API endpoint: Convert idea to hypothesis
+// API endpoint: Convert idea to hypothesis (with streaming)
 app.post('/api/generate-hypothesis', async (req, res) => {
   try {
     const { idea } = req.body;
@@ -423,8 +423,13 @@ app.post('/api/generate-hypothesis', async (req, res) => {
     // Replace placeholder in prompt with actual idea
     const fullPrompt = HYPOTHESIS_PROMPT.replace('{INPUT_PLACEHOLDER}', idea.trim());
 
-    // Call OpenAI API
-    const completion = await openai.chat.completions.create({
+    // Set headers for SSE streaming
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+
+    // Call OpenAI API with streaming
+    const stream = await openai.chat.completions.create({
       model: 'gpt-4',
       messages: [
         {
@@ -433,23 +438,30 @@ app.post('/api/generate-hypothesis', async (req, res) => {
         }
       ],
       temperature: 0.7,
-      max_tokens: 4000
+      max_tokens: 4000,
+      stream: true
     });
 
-    // Extract response
-    const hypothesis = completion.choices[0].message.content;
+    // Stream the response
+    for await (const chunk of stream) {
+      const content = chunk.choices[0]?.delta?.content || '';
+      if (content) {
+        // Send chunk as SSE
+        res.write(`data: ${JSON.stringify({ content })}\n\n`);
+      }
+    }
 
-    res.json({ hypothesis });
+    // Send completion signal
+    res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
+    res.end();
   } catch (error) {
     console.error('Error generating hypothesis:', error);
-    res.status(500).json({ 
-      error: 'Failed to generate hypothesis', 
-      details: error.message 
-    });
+    res.write(`data: ${JSON.stringify({ error: error.message })}\n\n`);
+    res.end();
   }
 });
 
-// API endpoint: Generate updated hypothesis with chat iteration
+// API endpoint: Generate updated hypothesis with chat iteration (with streaming)
 app.post('/api/generate-updated-hypothesis', async (req, res) => {
   try {
     const { idea, conversation } = req.body;
@@ -474,8 +486,13 @@ app.post('/api/generate-updated-hypothesis', async (req, res) => {
     // Build the prompt with conversation context
     let fullPrompt = HYPOTHESIS_PROMPT.replace('{INPUT_PLACEHOLDER}', conversationContext);
 
-    // Call OpenAI API
-    const completion = await openai.chat.completions.create({
+    // Set headers for SSE streaming
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+
+    // Call OpenAI API with streaming
+    const stream = await openai.chat.completions.create({
       model: 'gpt-4',
       messages: [
         {
@@ -484,19 +501,25 @@ app.post('/api/generate-updated-hypothesis', async (req, res) => {
         }
       ],
       temperature: 0.7,
-      max_tokens: 4000
+      max_tokens: 4000,
+      stream: true
     });
 
-    // Extract response
-    const hypothesis = completion.choices[0].message.content;
+    // Stream the response
+    for await (const chunk of stream) {
+      const content = chunk.choices[0]?.delta?.content || '';
+      if (content) {
+        res.write(`data: ${JSON.stringify({ content })}\n\n`);
+      }
+    }
 
-    res.json({ hypothesis });
+    // Send completion signal
+    res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
+    res.end();
   } catch (error) {
     console.error('Error generating updated hypothesis:', error);
-    res.status(500).json({ 
-      error: 'Failed to generate updated hypothesis', 
-      details: error.message 
-    });
+    res.write(`data: ${JSON.stringify({ error: error.message })}\n\n`);
+    res.end();
   }
 });
 
@@ -542,7 +565,7 @@ app.post('/api/chat', async (req, res) => {
   }
 });
 
-// API endpoint: Convert hypothesis to scope
+// API endpoint: Convert hypothesis to scope (with streaming)
 app.post('/api/generate-scope', async (req, res) => {
   try {
     const { hypothesis, idea } = req.body;
@@ -561,8 +584,13 @@ app.post('/api/generate-scope', async (req, res) => {
     let fullPrompt = SCOPE_PROMPT.replace('{INPUT_PLACEHOLDER}', inputContext.trim());
     fullPrompt = fullPrompt.replace('{HYPOTHESIS_PLACEHOLDER}', hypothesis.trim());
 
-    // Call OpenAI API
-    const completion = await openai.chat.completions.create({
+    // Set headers for SSE streaming
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+
+    // Call OpenAI API with streaming
+    const stream = await openai.chat.completions.create({
       model: 'gpt-4',
       messages: [
         {
@@ -571,19 +599,25 @@ app.post('/api/generate-scope', async (req, res) => {
         }
       ],
       temperature: 0.7,
-      max_tokens: 4000
+      max_tokens: 4000,
+      stream: true
     });
 
-    // Extract response
-    const scope = completion.choices[0].message.content;
+    // Stream the response
+    for await (const chunk of stream) {
+      const content = chunk.choices[0]?.delta?.content || '';
+      if (content) {
+        res.write(`data: ${JSON.stringify({ content })}\n\n`);
+      }
+    }
 
-    res.json({ scope });
+    // Send completion signal
+    res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
+    res.end();
   } catch (error) {
     console.error('Error generating scope:', error);
-    res.status(500).json({ 
-      error: 'Failed to generate scope', 
-      details: error.message 
-    });
+    res.write(`data: ${JSON.stringify({ error: error.message })}\n\n`);
+    res.end();
   }
 });
 

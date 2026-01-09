@@ -172,6 +172,11 @@ textarea:focus {
     font-size: 14px;
 }
 
+.btn-spacing {
+    margin-top: 15px;
+    margin-bottom: 10px;
+}
+
 .output {
     background-color: #f8f9fa;
     border: 1px solid #e9ecef;

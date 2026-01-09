@@ -135,26 +135,8 @@ generateHypothesisBtn.addEventListener('click', async () => {
     startProgress('hypothesis', ESTIMATED_TIMES.hypothesis);
     
     try {
-        // Call API
-        const response = await fetch('/api/generate-hypothesis', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({ idea })
-        });
-        
-        const data = await response.json();
-        
-        if (!response.ok) {
-            throw new Error(data.error || 'Failed to generate hypothesis');
-        }
-        
-        // Stop progress and complete
-        stopProgress();
-        
-        // Display hypothesis
-        hypothesisOutput.textContent = data.hypothesis;
+        // Prepare output area
+        hypothesisOutput.textContent = '';
         hypothesisSection.style.display = 'block';
         
         // Reset conversation history and show chat section
@@ -165,15 +147,71 @@ generateHypothesisBtn.addEventListener('click', async () => {
         // Scroll to hypothesis section
         hypothesisSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
         
+        // Call API with streaming
+        const response = await fetch('/api/generate-hypothesis', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ idea })
+        });
+        
+        if (!response.ok) {
+            throw new Error('Failed to generate hypothesis');
+        }
+        
+        // Handle streaming response
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let fullText = '';
+        
+        while (true) {
+            const { done, value } = await reader.read();
+            
+            if (done) break;
+            
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop(); // Keep incomplete line in buffer
+            
+            for (const line of lines) {
+                if (line.startsWith('data: ')) {
+                    try {
+                        const data = JSON.parse(line.slice(6));
+                        
+                        if (data.error) {
+                            throw new Error(data.error);
+                        }
+                        
+                        if (data.content) {
+                            fullText += data.content;
+                            hypothesisOutput.textContent = fullText;
+                            // Auto-scroll to bottom as text streams in
+                            hypothesisOutput.scrollTop = hypothesisOutput.scrollHeight;
+                        }
+                        
+                        if (data.done) {
+                            // Stop progress and complete
+                            stopProgress();
+                            generateHypothesisBtn.disabled = false;
+                            setTimeout(() => {
+                                hypothesisLoading.style.display = 'none';
+                            }, 500);
+                            return;
+                        }
+                    } catch (e) {
+                        // Skip invalid JSON lines
+                    }
+                }
+            }
+        }
+        
     } catch (error) {
         stopProgress();
         showError(`Error: ${error.message}`);
-    } finally {
         generateHypothesisBtn.disabled = false;
-        // Hide loading after a brief delay to show 100% completion
-        setTimeout(() => {
-            hypothesisLoading.style.display = 'none';
-        }, 500);
+        hypothesisLoading.style.display = 'none';
     }
 });
 
@@ -196,7 +234,14 @@ generateScopeBtn.addEventListener('click', async () => {
     startProgress('scope', ESTIMATED_TIMES.scope);
     
     try {
-        // Call API with both hypothesis and original idea
+        // Prepare output area
+        scopeOutput.textContent = '';
+        scopeSection.style.display = 'block';
+        
+        // Scroll to scope section
+        scopeSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        
+        // Call API with streaming
         const response = await fetch('/api/generate-scope', {
             method: 'POST',
             headers: {
@@ -208,31 +253,62 @@ generateScopeBtn.addEventListener('click', async () => {
             })
         });
         
-        const data = await response.json();
-        
         if (!response.ok) {
-            throw new Error(data.error || 'Failed to generate scope');
+            throw new Error('Failed to generate scope');
         }
         
-        // Stop progress and complete
-        stopProgress();
+        // Handle streaming response
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let fullText = '';
         
-        // Display scope
-        scopeOutput.textContent = data.scope;
-        scopeSection.style.display = 'block';
-        
-        // Scroll to scope section
-        scopeSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        while (true) {
+            const { done, value } = await reader.read();
+            
+            if (done) break;
+            
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop();
+            
+            for (const line of lines) {
+                if (line.startsWith('data: ')) {
+                    try {
+                        const data = JSON.parse(line.slice(6));
+                        
+                        if (data.error) {
+                            throw new Error(data.error);
+                        }
+                        
+                        if (data.content) {
+                            fullText += data.content;
+                            scopeOutput.textContent = fullText;
+                            // Auto-scroll to bottom as text streams in
+                            scopeOutput.scrollTop = scopeOutput.scrollHeight;
+                        }
+                        
+                        if (data.done) {
+                            // Stop progress and complete
+                            stopProgress();
+                            generateScopeBtn.disabled = false;
+                            setTimeout(() => {
+                                scopeLoading.style.display = 'none';
+                            }, 500);
+                            return;
+                        }
+                    } catch (e) {
+                        // Skip invalid JSON lines
+                    }
+                }
+            }
+        }
         
     } catch (error) {
         stopProgress();
         showError(`Error: ${error.message}`);
-    } finally {
         generateScopeBtn.disabled = false;
-        // Hide loading after a brief delay to show 100% completion
-        setTimeout(() => {
-            scopeLoading.style.display = 'none';
-        }, 500);
+        scopeLoading.style.display = 'none';
     }
 });
 
@@ -371,7 +447,16 @@ generateUpdatedHypothesisBtn.addEventListener('click', async () => {
     startProgress('updatedHypothesis', ESTIMATED_TIMES.updatedHypothesis);
     
     try {
-        // Call API with conversation history
+        // Store conversation history before clearing
+        const historyToSend = [...conversationHistory];
+        
+        // Prepare output area
+        hypothesisOutput.textContent = '';
+        
+        // Scroll to hypothesis
+        hypothesisSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        
+        // Call API with streaming
         const response = await fetch('/api/generate-updated-hypothesis', {
             method: 'POST',
             headers: {
@@ -379,38 +464,70 @@ generateUpdatedHypothesisBtn.addEventListener('click', async () => {
             },
             body: JSON.stringify({
                 idea: originalIdea,
-                conversation: conversationHistory
+                conversation: historyToSend
             })
         });
         
-        const data = await response.json();
-        
-        if (!response.ok) {
-            throw new Error(data.error || 'Failed to generate updated hypothesis');
-        }
-        
-        // Stop progress and complete
-        stopProgress();
-        
-        // Display updated hypothesis
-        hypothesisOutput.textContent = data.hypothesis;
-        
-        // Clear conversation history after update
+        // Clear conversation history after starting the API call
         conversationHistory = [];
         chatMessages.innerHTML = '';
         
-        // Scroll to hypothesis
-        hypothesisSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        if (!response.ok) {
+            throw new Error('Failed to generate updated hypothesis');
+        }
+        
+        // Handle streaming response
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let fullText = '';
+        
+        while (true) {
+            const { done, value } = await reader.read();
+            
+            if (done) break;
+            
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop();
+            
+            for (const line of lines) {
+                if (line.startsWith('data: ')) {
+                    try {
+                        const data = JSON.parse(line.slice(6));
+                        
+                        if (data.error) {
+                            throw new Error(data.error);
+                        }
+                        
+                        if (data.content) {
+                            fullText += data.content;
+                            hypothesisOutput.textContent = fullText;
+                            // Auto-scroll to bottom as text streams in
+                            hypothesisOutput.scrollTop = hypothesisOutput.scrollHeight;
+                        }
+                        
+                        if (data.done) {
+                            // Stop progress and complete
+                            stopProgress();
+                            generateUpdatedHypothesisBtn.disabled = false;
+                            setTimeout(() => {
+                                updatedHypothesisLoading.style.display = 'none';
+                            }, 500);
+                            return;
+                        }
+                    } catch (e) {
+                        // Skip invalid JSON lines
+                    }
+                }
+            }
+        }
         
     } catch (error) {
         stopProgress();
         showError(`Error: ${error.message}`);
-    } finally {
         generateUpdatedHypothesisBtn.disabled = false;
-        // Hide loading after a brief delay to show 100% completion
-        setTimeout(() => {
-            updatedHypothesisLoading.style.display = 'none';
-        }, 500);
+        updatedHypothesisLoading.style.display = 'none';
     }
 });
 

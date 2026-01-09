@@ -573,6 +573,17 @@ generateUpdatedHypothesisBtn.addEventListener('click', async () => {
                             // Stop progress and complete
                             stopProgress();
                             generateUpdatedHypothesisBtn.disabled = false;
+                            
+                            // Increment version after successful update
+                            hypothesisVersion++;
+                            updateVersionBadge();
+                            
+                            // Reset UI
+                            updateSuggestion.style.display = 'none';
+                            
+                            // Generate new welcome message for updated hypothesis
+                            generateWelcomeMessage(fullText);
+                            
                             setTimeout(() => {
                                 updatedHypothesisLoading.style.display = 'none';
                             }, 500);

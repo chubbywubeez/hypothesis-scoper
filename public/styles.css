@@ -406,6 +406,112 @@ textarea:focus {
 
 .chat-panel {
     min-width: 0;
+    position: relative;
+}
+
+.chat-toggle-container {
+    display: none; /* Hidden when expanded */
+}
+
+.chat-section-collapsed {
+    display: none;
+}
+
+.chat-panel.collapsed .chat-toggle-container {
+    display: block;
+}
+
+.chat-panel.collapsed .chat-section-collapsed {
+    display: none;
+}
+
+.chat-panel:not(.collapsed) .chat-toggle-container {
+    display: none;
+}
+
+.chat-panel:not(.collapsed) .chat-section-collapsed {
+    display: block;
+}
+
+/* Toggle button when collapsed */
+.chat-toggle-btn {
+    width: 100%;
+    padding: 15px;
+    background-color: #f8f9fa;
+    border: 2px dashed #dee2e6;
+    border-radius: 6px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    transition: all 0.3s;
+    font-size: 14px;
+    color: #495057;
+    font-weight: 500;
+}
+
+.chat-toggle-btn:hover {
+    background-color: #e9ecef;
+    border-color: #3498db;
+    color: #3498db;
+}
+
+.toggle-icon {
+    font-size: 18px;
+}
+
+.toggle-text {
+    font-weight: 600;
+}
+
+.chat-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 15px;
+}
+
+.chat-header-content {
+    flex: 1;
+}
+
+.chat-close-btn {
+    background: none;
+    border: none;
+    font-size: 24px;
+    color: #7f8c8d;
+    cursor: pointer;
+    padding: 0;
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 4px;
+    transition: all 0.2s;
+    line-height: 1;
+}
+
+.chat-close-btn:hover {
+    background-color: #f0f0f0;
+    color: #2c3e50;
+}
+
+/* When chat panel is collapsed, adjust layout */
+.hypothesis-layout.chat-collapsed {
+    grid-template-columns: 1fr;
+}
+
+.hypothesis-layout.chat-collapsed .chat-panel {
+    max-width: 200px;
+    margin: 0 auto;
+}
+
+@media (max-width: 1024px) {
+    .hypothesis-layout.chat-collapsed .chat-panel {
+        max-width: 100%;
+    }
 }
 
 #chat-section {

@@ -60,6 +60,10 @@ const exchangeCountDisplay = document.getElementById('exchange-count');
 const chatWelcome = document.getElementById('chat-welcome');
 const askQuestionsBtn = document.getElementById('ask-questions-btn');
 const getFeedbackBtn = document.getElementById('get-feedback-btn');
+const chatPanel = document.getElementById('chat-panel');
+const chatToggleBtn = document.getElementById('chat-toggle-btn');
+const chatCloseBtn = document.getElementById('chat-close-btn');
+const hypothesisLayout = document.querySelector('.hypothesis-layout');
 
 // Progress bar helper functions
 function startProgress(type, estimatedTime) {

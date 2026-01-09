@@ -632,6 +632,72 @@ function updateVersionBadge() {
     }
 }
 
+// Generate personalized welcome message by analyzing the hypothesis
+async function generateWelcomeMessage(hypothesis) {
+    if (!hypothesis || hypothesis.trim().length === 0) {
+        return;
+    }
+    
+    // Show welcome message with loading indicator
+    if (chatWelcome) {
+        chatWelcome.style.display = 'block';
+        const welcomeLoading = document.getElementById('welcome-loading');
+        const welcomeContent = document.getElementById('welcome-content');
+        if (welcomeLoading) welcomeLoading.style.display = 'block';
+        if (welcomeContent) welcomeContent.style.display = 'none';
+        
+        // Ensure welcome is in the messages container
+        if (!chatWelcome.parentNode) {
+            chatMessages.appendChild(chatWelcome);
+        }
+    }
+    
+    try {
+        // Call chat API to generate personalized welcome based on hypothesis
+        const response = await fetch('/api/chat', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                message: 'Based on this hypothesis, provide a brief welcome message (2-3 sentences) that identifies the key areas where you could help improve it. Highlight 1-2 specific questions or feedback points that would strengthen this hypothesis.',
+                idea: originalIdea,
+                hypothesis: hypothesis,
+                conversation: [] // Empty conversation for first message
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (!response.ok) {
+            throw new Error(data.error || 'Failed to generate welcome message');
+        }
+        
+        // Hide loading, show content
+        const welcomeLoading = document.getElementById('welcome-loading');
+        const welcomeContent = document.getElementById('welcome-content');
+        
+        if (welcomeLoading) welcomeLoading.style.display = 'none';
+        if (welcomeContent) {
+            welcomeContent.style.display = 'block';
+            // Format the response as paragraphs
+            const paragraphs = data.response.split('\n\n').filter(p => p.trim().length > 0);
+            welcomeContent.innerHTML = paragraphs.map(p => `<p>${p.trim()}</p>`).join('');
+        }
+        
+    } catch (error) {
+        console.error('Error generating welcome message:', error);
+        // Fallback to generic message on error
+        const welcomeLoading = document.getElementById('welcome-loading');
+        const welcomeContent = document.getElementById('welcome-content');
+        if (welcomeLoading) welcomeLoading.style.display = 'none';
+        if (welcomeContent) {
+            welcomeContent.style.display = 'block';
+            welcomeContent.innerHTML = '<p>I\'ll help you refine your hypothesis by asking clarifying questions and providing feedback.</p><p><strong>Send a message to start, or use the buttons below to get quick feedback.</strong></p>';
+        }
+    }
+}
+
 
 // Allow Enter key to send chat (Ctrl/Cmd + Enter for newline)
 chatInput.addEventListener('keydown', (e) => {

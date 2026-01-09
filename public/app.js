@@ -218,6 +218,11 @@ generateHypothesisBtn.addEventListener('click', async () => {
                             // Generate personalized welcome message based on hypothesis
                             generateWelcomeMessage(fullText);
                             
+                            // Initialize chat panel state when hypothesis section is shown
+                            setTimeout(() => {
+                                initChatPanelState();
+                            }, 100);
+                            
                             setTimeout(() => {
                                 hypothesisLoading.style.display = 'none';
                             }, 500);

@@ -430,7 +430,7 @@ app.post('/api/generate-hypothesis', async (req, res) => {
 
     // Call OpenAI API with streaming
     const stream = await openai.chat.completions.create({
-      model: 'gpt-4o',
+      model: 'gpt-5.2',
       messages: [
         {
           role: 'user',
@@ -458,135 +458,6 @@ app.post('/api/generate-hypothesis', async (req, res) => {
     console.error('Error generating hypothesis:', error);
     res.write(`data: ${JSON.stringify({ error: error.message })}\n\n`);
     res.end();
-  }
-});
-
-// API endpoint: Generate updated hypothesis with chat iteration (with streaming)
-app.post('/api/generate-updated-hypothesis', async (req, res) => {
-  try {
-    const { idea, conversation } = req.body;
-
-    // Validate input
-    if (!idea || idea.trim().length === 0) {
-      return res.status(400).json({ error: 'Idea input is required' });
-    }
-    
-    if (!conversation || !Array.isArray(conversation) || conversation.length === 0) {
-      return res.status(400).json({ error: 'Conversation history is required' });
-    }
-
-    // Build conversation context
-    let conversationContext = 'Original Idea:\n' + idea.trim() + '\n\n---\n\nConversation:\n';
-    conversation.forEach((msg, index) => {
-      conversationContext += `${msg.role === 'user' ? 'User' : 'Assistant'}: ${msg.content}\n\n`;
-    });
-    
-    conversationContext += '\n---\n\nBased on the original idea and the conversation above, please generate an updated hypothesis following the same structure as before.';
-
-    // Build the prompt with conversation context
-    let fullPrompt = HYPOTHESIS_PROMPT.replace('{INPUT_PLACEHOLDER}', conversationContext);
-
-    // Set headers for SSE streaming
-    res.setHeader('Content-Type', 'text/event-stream');
-    res.setHeader('Cache-Control', 'no-cache');
-    res.setHeader('Connection', 'keep-alive');
-
-    // Call OpenAI API with streaming
-    const stream = await openai.chat.completions.create({
-      model: 'gpt-4o',
-      messages: [
-        {
-          role: 'user',
-          content: fullPrompt
-        }
-      ],
-      temperature: 0.7,
-      max_tokens: 4000,
-      stream: true
-    });
-
-    // Stream the response
-    for await (const chunk of stream) {
-      const content = chunk.choices[0]?.delta?.content || '';
-      if (content) {
-        res.write(`data: ${JSON.stringify({ content })}\n\n`);
-      }
-    }
-
-    // Send completion signal
-    res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
-    res.end();
-  } catch (error) {
-    console.error('Error generating updated hypothesis:', error);
-    res.write(`data: ${JSON.stringify({ error: error.message })}\n\n`);
-    res.end();
-  }
-});
-
-// Chat prompt for hypothesis refinement feedback - natural conversational style
-const REFINEMENT_CHAT_PROMPT = `You are a helpful product manager assistant helping someone refine their hypothesis. Talk naturally and conversationally, like you would in a normal chat.
-
-Your goal: Help them improve their hypothesis by asking thoughtful questions and providing feedback in a friendly, conversational way.
-
-Context about what they're working on:
-- Original Idea: {IDEA_PLACEHOLDER}
-- Current Hypothesis: {HYPOTHESIS_PLACEHOLDER}
-- Previous Conversation: {CONVERSATION_PLACEHOLDER}
-- User's Current Message: {MESSAGE_PLACEHOLDER}
-
-Respond naturally and conversationally. Ask questions when helpful, but keep it friendly and conversational - not rigid or overly formal. If this is the first message, introduce yourself briefly and ask 2-3 good questions that would help strengthen their hypothesis.`;
-
-// API endpoint: Chat response (for refinement and feedback)
-app.post('/api/chat', async (req, res) => {
-  try {
-    const { message, idea, hypothesis, conversation } = req.body;
-
-    if (!message || message.trim().length === 0) {
-      return res.status(400).json({ error: 'Message is required' });
-    }
-
-    if (!hypothesis || hypothesis.trim().length === 0) {
-      return res.status(400).json({ error: 'Hypothesis is required for feedback' });
-    }
-
-    // Build conversation history context
-    let conversationContext = 'No previous conversation.';
-    if (conversation && Array.isArray(conversation) && conversation.length > 0) {
-      conversationContext = conversation.map(msg => 
-        `${msg.role === 'user' ? 'User' : 'Critic'}: ${msg.content}`
-      ).join('\n\n');
-    }
-
-    // Build the refinement prompt
-    let fullPrompt = REFINEMENT_CHAT_PROMPT
-      .replace('{IDEA_PLACEHOLDER}', idea || 'Not provided')
-      .replace('{HYPOTHESIS_PLACEHOLDER}', hypothesis.trim())
-      .replace('{CONVERSATION_PLACEHOLDER}', conversationContext)
-      .replace('{MESSAGE_PLACEHOLDER}', message.trim());
-
-    // Call OpenAI API
-    const completion = await openai.chat.completions.create({
-      model: 'gpt-4o',
-      messages: [
-        {
-          role: 'user',
-          content: fullPrompt
-        }
-      ],
-      temperature: 0.7,
-      max_tokens: 500
-    });
-
-    // Extract response
-    const response = completion.choices[0].message.content;
-
-    res.json({ response });
-  } catch (error) {
-    console.error('Error in chat:', error);
-    res.status(500).json({ 
-      error: 'Failed to get chat response', 
-      details: error.message 
-    });
   }
 });
 

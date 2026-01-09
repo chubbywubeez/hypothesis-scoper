@@ -3,10 +3,6 @@
 
 // Store original idea for scope generation
 let originalIdea = '';
-// Store conversation history for chat iteration
-let conversationHistory = [];
-// Track hypothesis version/draft number
-let hypothesisVersion = 1;
 
 // Progress tracking for loading bars
 let progressInterval = null;
@@ -15,8 +11,7 @@ let startTime = null;
 // Estimated generation times (in seconds) - based on typical API response times
 const ESTIMATED_TIMES = {
     hypothesis: 15, // ~15 seconds for hypothesis generation
-    scope: 20,      // ~20 seconds for scope generation
-    updatedHypothesis: 18 // ~18 seconds for updated hypothesis
+    scope: 20      // ~20 seconds for scope generation
 };
 
 // DOM elements
@@ -43,22 +38,6 @@ const scopeProgressBar = document.getElementById('scope-progress-bar');
 const scopeTimeElapsed = document.getElementById('scope-time-elapsed');
 const scopeTimeEstimate = document.getElementById('scope-time-estimate');
 
-const updatedHypothesisProgressBar = document.getElementById('updated-hypothesis-progress-bar');
-const updatedHypothesisTimeElapsed = document.getElementById('updated-hypothesis-time-elapsed');
-const updatedHypothesisTimeEstimate = document.getElementById('updated-hypothesis-time-estimate');
-
-// Chat elements
-const chatSection = document.getElementById('chat-section');
-const chatMessages = document.getElementById('chat-messages');
-const chatInput = document.getElementById('chat-input');
-const sendChatBtn = document.getElementById('send-chat-btn');
-const generateUpdatedHypothesisBtn = document.getElementById('generate-updated-hypothesis-btn');
-const updatedHypothesisLoading = document.getElementById('updated-hypothesis-loading');
-const hypothesisVersionBadge = document.getElementById('hypothesis-version');
-const updateSuggestion = document.getElementById('update-suggestion');
-const exchangeCountDisplay = document.getElementById('exchange-count');
-const chatWelcome = document.getElementById('chat-welcome');
-
 // Progress bar helper functions
 function startProgress(type, estimatedTime) {
     startTime = Date.now();
@@ -73,10 +52,6 @@ function startProgress(type, estimatedTime) {
         progressBar = scopeProgressBar;
         timeElapsed = scopeTimeElapsed;
         timeEstimate = scopeTimeEstimate;
-    } else if (type === 'updatedHypothesis') {
-        progressBar = updatedHypothesisProgressBar;
-        timeElapsed = updatedHypothesisTimeElapsed;
-        timeEstimate = updatedHypothesisTimeEstimate;
     }
     
     // Reset progress bar
@@ -113,7 +88,6 @@ function stopProgress() {
     // Set progress to 100% when done
     if (hypothesisProgressBar) hypothesisProgressBar.style.width = '100%';
     if (scopeProgressBar) scopeProgressBar.style.width = '100%';
-    if (updatedHypothesisProgressBar) updatedHypothesisProgressBar.style.width = '100%';
     
     startTime = null;
 }
@@ -144,11 +118,6 @@ generateHypothesisBtn.addEventListener('click', async () => {
         // Prepare output area
         hypothesisOutput.textContent = '';
         hypothesisSection.style.display = 'block';
-        
-        // Reset conversation history and show chat section
-        conversationHistory = [];
-        chatMessages.innerHTML = '';
-        chatSection.style.display = 'block';
         
         // Scroll to hypothesis section
         hypothesisSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -201,16 +170,6 @@ generateHypothesisBtn.addEventListener('click', async () => {
                             // Stop progress and complete
                             stopProgress();
                             generateHypothesisBtn.disabled = false;
-                            
-                            // Reset conversation and show UI elements
-                            conversationHistory = [];
-                            chatMessages.innerHTML = '';
-                            hypothesisVersion = 1;
-                            updateVersionBadge();
-                            updateSuggestion.style.display = 'none';
-                            
-                            // Generate personalized welcome message based on hypothesis
-                            generateWelcomeMessage(fullText);
                             
                             setTimeout(() => {
                                 hypothesisLoading.style.display = 'none';
@@ -396,296 +355,6 @@ function showSuccess() {
     setTimeout(() => {
         successNotification.style.display = 'none';
     }, 2000);
-}
-
-// Helper function to send chat message
-async function sendChatMessage(message) {
-    if (!message || message.trim().length === 0) {
-        return;
-    }
-    
-    // Hide welcome message if present
-    if (chatWelcome && chatWelcome.parentNode) {
-        chatWelcome.style.display = 'none';
-    }
-    
-    // Hide welcome loading/content if still visible
-    const welcomeLoading = document.getElementById('welcome-loading');
-    const welcomeContent = document.getElementById('welcome-content');
-    if (welcomeLoading) welcomeLoading.style.display = 'none';
-    if (welcomeContent) welcomeContent.style.display = 'none';
-    
-    // Add user message to conversation
-    conversationHistory.push({ role: 'user', content: message });
-    addChatMessage('user', message);
-    chatInput.value = '';
-    
-    // Disable input while processing
-    sendChatBtn.disabled = true;
-    chatInput.disabled = true;
-    
-    try {
-        // Call chat API with conversation history
-        const response = await fetch('/api/chat', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                message,
-                idea: originalIdea,
-                hypothesis: hypothesisOutput.textContent.trim(),
-                conversation: conversationHistory.slice(0, -1) // Send previous conversation, not current message
-            })
-        });
-        
-        const data = await response.json();
-        
-        if (!response.ok) {
-            throw new Error(data.error || 'Failed to get chat response');
-        }
-        
-        // Add assistant response to conversation
-        conversationHistory.push({ role: 'assistant', content: data.response });
-        addChatMessage('assistant', data.response, 'critic');
-        
-        // Show update suggestion after meaningful exchanges (after at least 1 user message and 1 assistant response)
-        if (conversationHistory.length >= 2) {
-            updateSuggestion.style.display = 'block';
-        }
-        
-    } catch (error) {
-        showError(`Error: ${error.message}`);
-    } finally {
-        sendChatBtn.disabled = false;
-        chatInput.disabled = false;
-        chatInput.focus();
-    }
-}
-
-// Send chat message
-sendChatBtn.addEventListener('click', async () => {
-    const message = chatInput.value.trim();
-    await sendChatMessage(message);
-});
-
-
-// Generate updated hypothesis with conversation history
-generateUpdatedHypothesisBtn.addEventListener('click', async () => {
-    if (conversationHistory.length === 0) {
-        showError('Please have at least one conversation exchange before generating an updated hypothesis.');
-        return;
-    }
-    
-    // Show loading state with progress
-    generateUpdatedHypothesisBtn.disabled = true;
-    updatedHypothesisLoading.style.display = 'block';
-    hideError();
-    
-    // Start progress tracking
-    startProgress('updatedHypothesis', ESTIMATED_TIMES.updatedHypothesis);
-    
-    try {
-        // Prepare output area
-        hypothesisOutput.textContent = '';
-        
-        // Scroll to hypothesis
-        hypothesisSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        
-        // Call API with streaming
-        const response = await fetch('/api/generate-updated-hypothesis', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                idea: originalIdea,
-                conversation: historyToSend
-            })
-        });
-        
-        // Hide update suggestion during generation
-        updateSuggestion.style.display = 'none';
-        
-        // Clear conversation history after starting the API call (version will increment on completion)
-        const historyToSend = [...conversationHistory];
-        conversationHistory = [];
-        chatMessages.innerHTML = '';
-        chatExchangeCount.style.display = 'none';
-        
-        if (!response.ok) {
-            throw new Error('Failed to generate updated hypothesis');
-        }
-        
-        // Handle streaming response
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = '';
-        let fullText = '';
-        
-        while (true) {
-            const { done, value } = await reader.read();
-            
-            if (done) break;
-            
-            buffer += decoder.decode(value, { stream: true });
-            const lines = buffer.split('\n');
-            buffer = lines.pop();
-            
-            for (const line of lines) {
-                if (line.startsWith('data: ')) {
-                    try {
-                        const data = JSON.parse(line.slice(6));
-                        
-                        if (data.error) {
-                            throw new Error(data.error);
-                        }
-                        
-                        if (data.content) {
-                            fullText += data.content;
-                            hypothesisOutput.textContent = fullText;
-                            // Auto-scroll to bottom as text streams in
-                            hypothesisOutput.scrollTop = hypothesisOutput.scrollHeight;
-                        }
-                        
-                        if (data.done) {
-                            // Stop progress and complete
-                            stopProgress();
-                            generateUpdatedHypothesisBtn.disabled = false;
-                            
-                            // Increment version after successful update
-                            hypothesisVersion++;
-                            updateVersionBadge();
-                            
-                            // Reset UI
-                            updateSuggestion.style.display = 'none';
-                            
-                            // Generate new welcome message for updated hypothesis
-                            generateWelcomeMessage(fullText);
-                            
-                            setTimeout(() => {
-                                updatedHypothesisLoading.style.display = 'none';
-                            }, 500);
-                            return;
-                        }
-                    } catch (e) {
-                        // Skip invalid JSON lines
-                    }
-                }
-            }
-        }
-        
-    } catch (error) {
-        stopProgress();
-        showError(`Error: ${error.message}`);
-        generateUpdatedHypothesisBtn.disabled = false;
-        updatedHypothesisLoading.style.display = 'none';
-    }
-});
-
-// Add chat message to UI
-function addChatMessage(role, content, roleLabel = null) {
-    const messageDiv = document.createElement('div');
-    messageDiv.className = `chat-message ${role}`;
-    
-    const roleDiv = document.createElement('div');
-    roleDiv.className = 'role';
-    roleDiv.textContent = role === 'user' ? 'You' : (roleLabel === 'critic' ? 'Critic' : 'Assistant');
-    
-    const contentDiv = document.createElement('div');
-    contentDiv.className = 'content';
-    contentDiv.textContent = content;
-    
-    messageDiv.appendChild(roleDiv);
-    messageDiv.appendChild(contentDiv);
-    chatMessages.appendChild(messageDiv);
-    
-    // Scroll to bottom
-    chatMessages.scrollTop = chatMessages.scrollHeight;
-}
-
-// Update version badge
-function updateVersionBadge() {
-    if (hypothesisVersionBadge) {
-        hypothesisVersionBadge.textContent = `Draft v${hypothesisVersion}`;
-    }
-}
-
-// Generate personalized welcome message by analyzing the hypothesis
-async function generateWelcomeMessage(hypothesis) {
-    if (!hypothesis || hypothesis.trim().length === 0) {
-        return;
-    }
-    
-    // Show welcome message with loading indicator
-    if (chatWelcome) {
-        chatWelcome.style.display = 'block';
-        const welcomeLoading = document.getElementById('welcome-loading');
-        const welcomeContent = document.getElementById('welcome-content');
-        if (welcomeLoading) welcomeLoading.style.display = 'block';
-        if (welcomeContent) welcomeContent.style.display = 'none';
-        
-        // Ensure welcome is in the messages container
-        if (!chatWelcome.parentNode) {
-            chatMessages.appendChild(chatWelcome);
-        }
-    }
-    
-    try {
-        // Call chat API to generate personalized welcome based on hypothesis
-        const response = await fetch('/api/chat', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                message: 'Hi! I\'m here to help you refine this hypothesis. Let me take a look and ask a few questions that could help strengthen it.',
-                idea: originalIdea,
-                hypothesis: hypothesis,
-                conversation: [] // Empty conversation for first message
-            })
-        });
-        
-        const data = await response.json();
-        
-        if (!response.ok) {
-            throw new Error(data.error || 'Failed to generate welcome message');
-        }
-        
-        // Hide loading, show content
-        const welcomeLoading = document.getElementById('welcome-loading');
-        const welcomeContent = document.getElementById('welcome-content');
-        
-        if (welcomeLoading) welcomeLoading.style.display = 'none';
-        if (welcomeContent) {
-            welcomeContent.style.display = 'block';
-            // Format the response as paragraphs
-            const paragraphs = data.response.split('\n\n').filter(p => p.trim().length > 0);
-            welcomeContent.innerHTML = paragraphs.map(p => `<p>${p.trim()}</p>`).join('');
-        }
-        
-    } catch (error) {
-        console.error('Error generating welcome message:', error);
-        // Fallback to generic message on error
-        const welcomeLoading = document.getElementById('welcome-loading');
-        const welcomeContent = document.getElementById('welcome-content');
-        if (welcomeLoading) welcomeLoading.style.display = 'none';
-        if (welcomeContent) {
-            welcomeContent.style.display = 'block';
-            welcomeContent.innerHTML = '<p>I\'ll help you refine your hypothesis by asking clarifying questions and providing feedback.</p><p><strong>Send a message to start, or use the buttons below to get quick feedback.</strong></p>';
-        }
-    }
-}
-
-
-// Allow Enter key to send chat (Ctrl/Cmd + Enter for newline)
-if (chatInput) {
-    chatInput.addEventListener('keydown', (e) => {
-        if (e.key === 'Enter' && !e.shiftKey && !e.ctrlKey && !e.metaKey) {
-            e.preventDefault();
-            sendChatBtn.click();
-        }
-    });
 }
 
 // Allow Enter key to submit (Ctrl/Cmd + Enter for newline)

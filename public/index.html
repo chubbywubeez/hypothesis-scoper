@@ -4,6 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Hypothesis Scoper</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -39,10 +42,7 @@
         <!-- Step 2: Hypothesis Output with Side-by-Side Layout -->
         <section class="card" id="hypothesis-section" style="display: none;">
             <div class="section-header">
-                <div class="header-left">
-                    <h2>2. Your Hypothesis</h2>
-                    <span id="hypothesis-version" class="version-badge">Draft v1</span>
-                </div>
+                <h2>2. Your Hypothesis</h2>
                 <button id="copy-hypothesis-btn" class="btn btn-secondary btn-small">
                     Copy to Clipboard
                 </button>
@@ -51,58 +51,6 @@
             <!-- Hypothesis Output -->
             <div class="hypothesis-panel">
                 <div id="hypothesis-output" class="output hypothesis-output"></div>
-            </div>
-            
-            <!-- Chat Section for Refinement Feedback (below hypothesis) -->
-            <div id="chat-section">
-                <div class="chat-header">
-                    <h3>🔍 Refine Together</h3>
-                    <span class="chat-subtitle">Get feedback & clarifying questions</span>
-                </div>
-                        
-                        <div id="chat-messages" class="chat-messages">
-                            <div class="chat-welcome" id="chat-welcome" style="display: none;">
-                                <div id="welcome-loading" class="welcome-loading">
-                                    <div class="thinking-indicator">
-                                        <span class="thinking-dots"></span>
-                                        <span>Analyzing your hypothesis...</span>
-                                    </div>
-                                </div>
-                                <div id="welcome-content" style="display: none;"></div>
-                            </div>
-                        </div>
-                        
-                        <div class="chat-input-container">
-                            <textarea 
-                                id="chat-input" 
-                                placeholder="Ask for feedback, clarifying questions, or share your thoughts..."
-                                rows="3"
-                            ></textarea>
-                            <button id="send-chat-btn" class="btn btn-secondary btn-small">
-                                Send
-                            </button>
-                        </div>
-                        
-                <!-- Apply Changes button (appears after conversation exchanges) -->
-                <div id="update-suggestion" class="update-suggestion" style="display: none;">
-                    <div class="update-suggestion-content">
-                        <span id="update-suggestion-text">Based on our discussion, ready to update the hypothesis?</span>
-                        <button id="generate-updated-hypothesis-btn" class="btn btn-primary">
-                            ✓ Apply Changes
-                        </button>
-                    </div>
-                </div>
-                        
-                        <div id="updated-hypothesis-loading" class="loading-container" style="display: none;">
-                            <div class="loading-text">Updating hypothesis...</div>
-                            <div class="progress-bar-container">
-                                <div id="updated-hypothesis-progress-bar" class="progress-bar"></div>
-                            </div>
-                            <div class="time-estimate">
-                                <span id="updated-hypothesis-time-elapsed">0s</span> elapsed
-                                <span id="updated-hypothesis-time-estimate" class="estimate-text"></span>
-                            </div>
-                        </div>
             </div>
             
             <div class="action-buttons">

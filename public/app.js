@@ -6,6 +6,17 @@ let originalIdea = '';
 // Store conversation history for chat iteration
 let conversationHistory = [];
 
+// Progress tracking for loading bars
+let progressInterval = null;
+let startTime = null;
+
+// Estimated generation times (in seconds) - based on typical API response times
+const ESTIMATED_TIMES = {
+    hypothesis: 15, // ~15 seconds for hypothesis generation
+    scope: 20,      // ~20 seconds for scope generation
+    updatedHypothesis: 18 // ~18 seconds for updated hypothesis
+};
+
 // DOM elements
 const ideaInput = document.getElementById('idea-input');
 const generateHypothesisBtn = document.getElementById('generate-hypothesis-btn');
@@ -21,6 +32,19 @@ const scopeLoading = document.getElementById('scope-loading');
 const errorMessage = document.getElementById('error-message');
 const successNotification = document.getElementById('success-notification');
 
+// Progress bar elements
+const hypothesisProgressBar = document.getElementById('hypothesis-progress-bar');
+const hypothesisTimeElapsed = document.getElementById('hypothesis-time-elapsed');
+const hypothesisTimeEstimate = document.getElementById('hypothesis-time-estimate');
+
+const scopeProgressBar = document.getElementById('scope-progress-bar');
+const scopeTimeElapsed = document.getElementById('scope-time-elapsed');
+const scopeTimeEstimate = document.getElementById('scope-time-estimate');
+
+const updatedHypothesisProgressBar = document.getElementById('updated-hypothesis-progress-bar');
+const updatedHypothesisTimeElapsed = document.getElementById('updated-hypothesis-time-elapsed');
+const updatedHypothesisTimeEstimate = document.getElementById('updated-hypothesis-time-estimate');
+
 // Chat elements
 const chatSection = document.getElementById('chat-section');
 const chatMessages = document.getElementById('chat-messages');
@@ -28,6 +52,65 @@ const chatInput = document.getElementById('chat-input');
 const sendChatBtn = document.getElementById('send-chat-btn');
 const generateUpdatedHypothesisBtn = document.getElementById('generate-updated-hypothesis-btn');
 const updatedHypothesisLoading = document.getElementById('updated-hypothesis-loading');
+
+// Progress bar helper functions
+function startProgress(type, estimatedTime) {
+    startTime = Date.now();
+    let progressBar, timeElapsed, timeEstimate;
+    
+    // Get the right elements based on type
+    if (type === 'hypothesis') {
+        progressBar = hypothesisProgressBar;
+        timeElapsed = hypothesisTimeElapsed;
+        timeEstimate = hypothesisTimeEstimate;
+    } else if (type === 'scope') {
+        progressBar = scopeProgressBar;
+        timeElapsed = scopeTimeElapsed;
+        timeEstimate = scopeTimeEstimate;
+    } else if (type === 'updatedHypothesis') {
+        progressBar = updatedHypothesisProgressBar;
+        timeElapsed = updatedHypothesisTimeElapsed;
+        timeEstimate = updatedHypothesisTimeEstimate;
+    }
+    
+    // Reset progress bar
+    progressBar.style.width = '0%';
+    
+    // Update progress and time estimates
+    progressInterval = setInterval(() => {
+        const elapsed = (Date.now() - startTime) / 1000; // seconds
+        const progress = Math.min((elapsed / estimatedTime) * 100, 95); // Cap at 95% until complete
+        
+        // Update progress bar
+        progressBar.style.width = progress + '%';
+        
+        // Update time display
+        const elapsedSec = Math.floor(elapsed);
+        timeElapsed.textContent = elapsedSec + 's';
+        
+        // Estimate remaining time
+        if (elapsed < estimatedTime) {
+            const remaining = Math.ceil(estimatedTime - elapsed);
+            timeEstimate.textContent = `(~${remaining}s remaining)`;
+        } else {
+            timeEstimate.textContent = '(almost done...)';
+        }
+    }, 100); // Update every 100ms
+}
+
+function stopProgress() {
+    if (progressInterval) {
+        clearInterval(progressInterval);
+        progressInterval = null;
+    }
+    
+    // Set progress to 100% when done
+    if (hypothesisProgressBar) hypothesisProgressBar.style.width = '100%';
+    if (scopeProgressBar) scopeProgressBar.style.width = '100%';
+    if (updatedHypothesisProgressBar) updatedHypothesisProgressBar.style.width = '100%';
+    
+    startTime = null;
+}
 
 // Generate hypothesis from idea
 generateHypothesisBtn.addEventListener('click', async () => {
@@ -42,11 +125,14 @@ generateHypothesisBtn.addEventListener('click', async () => {
     // Store original idea for later use
     originalIdea = idea;
     
-    // Show loading state
+    // Show loading state with progress
     generateHypothesisBtn.disabled = true;
     hypothesisLoading.style.display = 'block';
     hideError();
     hypothesisSection.style.display = 'none';
+    
+    // Start progress tracking
+    startProgress('hypothesis', ESTIMATED_TIMES.hypothesis);
     
     try {
         // Call API
@@ -64,6 +150,9 @@ generateHypothesisBtn.addEventListener('click', async () => {
             throw new Error(data.error || 'Failed to generate hypothesis');
         }
         
+        // Stop progress and complete
+        stopProgress();
+        
         // Display hypothesis
         hypothesisOutput.textContent = data.hypothesis;
         hypothesisSection.style.display = 'block';
@@ -77,10 +166,14 @@ generateHypothesisBtn.addEventListener('click', async () => {
         hypothesisSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
         
     } catch (error) {
+        stopProgress();
         showError(`Error: ${error.message}`);
     } finally {
         generateHypothesisBtn.disabled = false;
-        hypothesisLoading.style.display = 'none';
+        // Hide loading after a brief delay to show 100% completion
+        setTimeout(() => {
+            hypothesisLoading.style.display = 'none';
+        }, 500);
     }
 });
 
@@ -93,11 +186,14 @@ generateScopeBtn.addEventListener('click', async () => {
         return;
     }
     
-    // Show loading state
+    // Show loading state with progress
     generateScopeBtn.disabled = true;
     scopeLoading.style.display = 'block';
     hideError();
     scopeSection.style.display = 'none';
+    
+    // Start progress tracking
+    startProgress('scope', ESTIMATED_TIMES.scope);
     
     try {
         // Call API with both hypothesis and original idea
@@ -118,6 +214,9 @@ generateScopeBtn.addEventListener('click', async () => {
             throw new Error(data.error || 'Failed to generate scope');
         }
         
+        // Stop progress and complete
+        stopProgress();
+        
         // Display scope
         scopeOutput.textContent = data.scope;
         scopeSection.style.display = 'block';
@@ -126,10 +225,14 @@ generateScopeBtn.addEventListener('click', async () => {
         scopeSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
         
     } catch (error) {
+        stopProgress();
         showError(`Error: ${error.message}`);
     } finally {
         generateScopeBtn.disabled = false;
-        scopeLoading.style.display = 'none';
+        // Hide loading after a brief delay to show 100% completion
+        setTimeout(() => {
+            scopeLoading.style.display = 'none';
+        }, 500);
     }
 });
 
@@ -259,10 +362,13 @@ generateUpdatedHypothesisBtn.addEventListener('click', async () => {
         return;
     }
     
-    // Show loading state
+    // Show loading state with progress
     generateUpdatedHypothesisBtn.disabled = true;
     updatedHypothesisLoading.style.display = 'block';
     hideError();
+    
+    // Start progress tracking
+    startProgress('updatedHypothesis', ESTIMATED_TIMES.updatedHypothesis);
     
     try {
         // Call API with conversation history
@@ -283,6 +389,9 @@ generateUpdatedHypothesisBtn.addEventListener('click', async () => {
             throw new Error(data.error || 'Failed to generate updated hypothesis');
         }
         
+        // Stop progress and complete
+        stopProgress();
+        
         // Display updated hypothesis
         hypothesisOutput.textContent = data.hypothesis;
         
@@ -294,10 +403,14 @@ generateUpdatedHypothesisBtn.addEventListener('click', async () => {
         hypothesisSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
         
     } catch (error) {
+        stopProgress();
         showError(`Error: ${error.message}`);
     } finally {
         generateUpdatedHypothesisBtn.disabled = false;
-        updatedHypothesisLoading.style.display = 'none';
+        // Hide loading after a brief delay to show 100% completion
+        setTimeout(() => {
+            updatedHypothesisLoading.style.display = 'none';
+        }, 500);
     }
 });
 

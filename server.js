@@ -14,6 +14,15 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static('public'));
 
+// Debug: Log environment info (first few chars only for security)
+console.log('=== ENVIRONMENT DEBUG ===');
+console.log('PORT:', process.env.PORT);
+console.log('NODE_ENV:', process.env.NODE_ENV);
+console.log('Total env vars:', Object.keys(process.env).length);
+console.log('Has OPENAI_API_KEY:', !!process.env.OPENAI_API_KEY);
+console.log('OPENAI_API_KEY length:', process.env.OPENAI_API_KEY ? process.env.OPENAI_API_KEY.length : 0);
+console.log('=======================');
+
 // Check for required environment variable
 if (!process.env.OPENAI_API_KEY) {
   console.error('ERROR: OPENAI_API_KEY environment variable is not set!');

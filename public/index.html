@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hypothesis Scoper</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Hypothesis Scoper</h1>
+            <p class="subtitle">Convert ideas → hypotheses → scopes</p>
+        </header>
+
+        <!-- Step 1: Idea Input -->
+        <section class="card" id="idea-section">
+            <h2>1. Enter Your Idea</h2>
+            <textarea 
+                id="idea-input" 
+                placeholder="Paste your raw brain dump here..."
+                rows="8"
+            ></textarea>
+            <button id="generate-hypothesis-btn" class="btn btn-primary">
+                Generate Hypothesis
+            </button>
+            <div id="hypothesis-loading" class="loading" style="display: none;">
+                Generating hypothesis...
+            </div>
+        </section>
+
+        <!-- Step 2: Hypothesis Output -->
+        <section class="card" id="hypothesis-section" style="display: none;">
+            <div class="section-header">
+                <h2>2. Generated Hypothesis</h2>
+                <button id="copy-hypothesis-btn" class="btn btn-secondary btn-small">
+                    Copy to Clipboard
+                </button>
+            </div>
+            <div id="hypothesis-output" class="output"></div>
+            
+            <!-- Chat Section for Iteration -->
+            <div id="chat-section" style="display: none;">
+                <h3>Iterate on Hypothesis</h3>
+                <div id="chat-messages" class="chat-messages"></div>
+                <div class="chat-input-container">
+                    <textarea 
+                        id="chat-input" 
+                        placeholder="Ask questions or provide feedback to refine the hypothesis..."
+                        rows="3"
+                    ></textarea>
+                    <button id="send-chat-btn" class="btn btn-secondary btn-small">
+                        Send
+                    </button>
+                </div>
+                <button id="generate-updated-hypothesis-btn" class="btn btn-primary" style="margin-top: 15px;">
+                    Generate Updated Hypothesis
+                </button>
+                <div id="updated-hypothesis-loading" class="loading" style="display: none;">
+                    Generating updated hypothesis...
+                </div>
+            </div>
+            
+            <button id="generate-scope-btn" class="btn btn-primary">
+                Generate Scope
+            </button>
+            <div id="scope-loading" class="loading" style="display: none;">
+                Generating scope...
+            </div>
+        </section>
+
+        <!-- Step 3: Scope Output -->
+        <section class="card" id="scope-section" style="display: none;">
+            <div class="section-header">
+                <h2>3. Generated Scope</h2>
+                <button id="copy-scope-btn" class="btn btn-secondary btn-small">
+                    Copy to Clipboard
+                </button>
+            </div>
+            <div id="scope-output" class="output"></div>
+        </section>
+
+        <!-- Error messages -->
+        <div id="error-message" class="error" style="display: none;"></div>
+
+        <!-- Success notification -->
+        <div id="success-notification" class="success-notification" style="display: none;">
+            Copied to clipboard!
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
+

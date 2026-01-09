@@ -58,8 +58,6 @@ const hypothesisVersionBadge = document.getElementById('hypothesis-version');
 const updateSuggestion = document.getElementById('update-suggestion');
 const exchangeCountDisplay = document.getElementById('exchange-count');
 const chatWelcome = document.getElementById('chat-welcome');
-const askQuestionsBtn = document.getElementById('ask-questions-btn');
-const getFeedbackBtn = document.getElementById('get-feedback-btn');
 
 // Progress bar helper functions
 function startProgress(type, estimatedTime) {
@@ -425,8 +423,6 @@ async function sendChatMessage(message) {
     // Disable input while processing
     sendChatBtn.disabled = true;
     chatInput.disabled = true;
-    if (askQuestionsBtn) askQuestionsBtn.disabled = true;
-    if (getFeedbackBtn) getFeedbackBtn.disabled = true;
     
     try {
         // Call chat API with conversation history
@@ -453,8 +449,8 @@ async function sendChatMessage(message) {
         conversationHistory.push({ role: 'assistant', content: data.response });
         addChatMessage('assistant', data.response, 'critic');
         
-        // Show update suggestion after meaningful exchanges
-        if (conversationHistory.length >= 4) { // At least 2 exchanges (user + assistant each)
+        // Show update suggestion after meaningful exchanges (after at least 1 user message and 1 assistant response)
+        if (conversationHistory.length >= 2) {
             updateSuggestion.style.display = 'block';
         }
         
@@ -463,8 +459,6 @@ async function sendChatMessage(message) {
     } finally {
         sendChatBtn.disabled = false;
         chatInput.disabled = false;
-        if (askQuestionsBtn) askQuestionsBtn.disabled = false;
-        if (getFeedbackBtn) getFeedbackBtn.disabled = false;
         chatInput.focus();
     }
 }
@@ -475,21 +469,6 @@ sendChatBtn.addEventListener('click', async () => {
     await sendChatMessage(message);
 });
 
-// Quick action: Ask top 3 questions
-if (askQuestionsBtn) {
-    askQuestionsBtn.addEventListener('click', async () => {
-        const message = 'What are the 3 highest-value follow-up questions you could ask to 10x the quality of this hypothesis? Focus on assumptions, missing context, or clarifying leaps that would strengthen testability.';
-        await sendChatMessage(message);
-    });
-}
-
-// Quick action: Get critical feedback
-if (getFeedbackBtn) {
-    getFeedbackBtn.addEventListener('click', async () => {
-        const message = 'Provide critical feedback on this hypothesis. Be brutally honest about assumptions, leaps in logic, and missing information. What would strengthen this hypothesis?';
-        await sendChatMessage(message);
-    });
-}
 
 // Generate updated hypothesis with conversation history
 generateUpdatedHypothesisBtn.addEventListener('click', async () => {
@@ -660,7 +639,7 @@ async function generateWelcomeMessage(hypothesis) {
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                message: 'Based on this hypothesis, ask 2-3 clear, focused questions that would most improve it. Be concise - just ask the questions directly.',
+                message: 'Hi! I\'m here to help you refine this hypothesis. Let me take a look and ask a few questions that could help strengthen it.',
                 idea: originalIdea,
                 hypothesis: hypothesis,
                 conversation: [] // Empty conversation for first message

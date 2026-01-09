@@ -83,25 +83,15 @@
                             </button>
                         </div>
                         
-                        <!-- Quick Actions -->
-                        <div class="quick-actions">
-                            <button id="ask-questions-btn" class="btn btn-secondary btn-small">
-                                🤔 Ask Top 3 Questions
-                            </button>
-                            <button id="get-feedback-btn" class="btn btn-secondary btn-small">
-                                💡 Get Critical Feedback
-                            </button>
-                        </div>
-                        
-                        <!-- Auto-suggest update button (appears after exchanges) -->
-                        <div id="update-suggestion" class="update-suggestion" style="display: none;">
-                            <div class="update-suggestion-content">
-                                <span id="update-suggestion-text">Based on our discussion, ready to update the hypothesis?</span>
-                                <button id="generate-updated-hypothesis-btn" class="btn btn-primary btn-small">
-                                    ✓ Update Hypothesis
-                                </button>
-                            </div>
-                        </div>
+                <!-- Apply Changes button (appears after conversation exchanges) -->
+                <div id="update-suggestion" class="update-suggestion" style="display: none;">
+                    <div class="update-suggestion-content">
+                        <span id="update-suggestion-text">Based on our discussion, ready to update the hypothesis?</span>
+                        <button id="generate-updated-hypothesis-btn" class="btn btn-primary">
+                            ✓ Apply Changes
+                        </button>
+                    </div>
+                </div>
                         
                         <div id="updated-hypothesis-loading" class="loading-container" style="display: none;">
                             <div class="loading-text">Updating hypothesis...</div>

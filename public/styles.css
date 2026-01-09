@@ -371,6 +371,39 @@ textarea:focus {
     min-width: 0; /* Allows text to wrap */
 }
 
+.hypothesis-output {
+    background-color: #ffffff;
+    border: 2px solid #e9ecef;
+    border-radius: 6px;
+    padding: 25px;
+    white-space: pre-wrap;
+    font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
+    font-size: 14px;
+    line-height: 1.7;
+    max-height: none;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    transition: border-color 0.3s;
+}
+
+.hypothesis-output:focus-within {
+    border-color: #3498db;
+    outline: none;
+}
+
+/* Make hypothesis feel more like a document/canvas */
+.hypothesis-output {
+    cursor: text;
+    min-height: 400px;
+}
+
+@media (max-width: 768px) {
+    .hypothesis-output {
+        padding: 20px;
+        font-size: 13px;
+        min-height: 300px;
+    }
+}
+
 .chat-panel {
     min-width: 0;
 }
@@ -479,6 +512,12 @@ textarea:focus {
     color: #2e7d32;
     font-size: 14px;
     font-weight: 500;
+}
+
+/* Chat message styling for critic role */
+.chat-message.assistant .role {
+    color: #e74c3c;
+    font-weight: 600;
 }
 
 .action-buttons {

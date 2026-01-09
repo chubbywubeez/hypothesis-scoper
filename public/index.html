@@ -48,30 +48,17 @@
                 </button>
             </div>
             
-            <div class="hypothesis-layout">
-                <!-- Left: Hypothesis Output -->
-                <div class="hypothesis-panel">
-                    <div id="hypothesis-output" class="output hypothesis-output"></div>
+            <!-- Hypothesis Output -->
+            <div class="hypothesis-panel">
+                <div id="hypothesis-output" class="output hypothesis-output"></div>
+            </div>
+            
+            <!-- Chat Section for Refinement Feedback (below hypothesis) -->
+            <div id="chat-section">
+                <div class="chat-header">
+                    <h3>🔍 Refine Together</h3>
+                    <span class="chat-subtitle">Get feedback & clarifying questions</span>
                 </div>
-                
-                <!-- Right: Chat Section for Refinement Feedback -->
-                <div class="chat-panel" id="chat-panel">
-                    <div class="chat-toggle-container">
-                        <button id="chat-toggle-btn" class="chat-toggle-btn" title="Expand Refine Together">
-                            <span class="toggle-icon">🔍</span>
-                            <span class="toggle-text">Refine Together</span>
-                        </button>
-                    </div>
-                    <div id="chat-section" class="chat-section-collapsed">
-                        <div class="chat-header">
-                            <div class="chat-header-content">
-                                <h3>🔍 Refine Together</h3>
-                                <span class="chat-subtitle">Get feedback & clarifying questions</span>
-                            </div>
-                            <button id="chat-close-btn" class="chat-close-btn" title="Collapse">
-                                <span>×</span>
-                            </button>
-                        </div>
                         
                         <div id="chat-messages" class="chat-messages">
                             <div class="chat-welcome" id="chat-welcome" style="display: none;">

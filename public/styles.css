@@ -359,17 +359,11 @@ textarea:focus {
     background: #555;
 }
 
-/* Side-by-side layout for hypothesis and chat */
-.hypothesis-layout {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 30px;
+/* Vertical layout - hypothesis on top, chat below */
+.hypothesis-panel {
     margin-bottom: 30px;
 }
 
-.hypothesis-panel {
-    min-width: 0; /* Allows text to wrap */
-}
 
 .hypothesis-output {
     background-color: #ffffff;

@@ -60,10 +60,6 @@ const exchangeCountDisplay = document.getElementById('exchange-count');
 const chatWelcome = document.getElementById('chat-welcome');
 const askQuestionsBtn = document.getElementById('ask-questions-btn');
 const getFeedbackBtn = document.getElementById('get-feedback-btn');
-const chatPanel = document.getElementById('chat-panel');
-const chatToggleBtn = document.getElementById('chat-toggle-btn');
-const chatCloseBtn = document.getElementById('chat-close-btn');
-let hypothesisLayout = null; // Will be set when hypothesis section is shown
 
 // Progress bar helper functions
 function startProgress(type, estimatedTime) {
@@ -217,11 +213,6 @@ generateHypothesisBtn.addEventListener('click', async () => {
                             
                             // Generate personalized welcome message based on hypothesis
                             generateWelcomeMessage(fullText);
-                            
-                            // Initialize chat panel state when hypothesis section is shown
-                            setTimeout(() => {
-                                initChatPanelState();
-                            }, 100);
                             
                             setTimeout(() => {
                                 hypothesisLoading.style.display = 'none';
@@ -669,7 +660,7 @@ async function generateWelcomeMessage(hypothesis) {
                 'Content-Type': 'application/json'
             },
             body: JSON.stringify({
-                message: 'Based on this hypothesis, provide a brief welcome message (2-3 sentences) that identifies the key areas where you could help improve it. Highlight 1-2 specific questions or feedback points that would strengthen this hypothesis.',
+                message: 'Based on this hypothesis, ask 2-3 clear, focused questions that would most improve it. Be concise - just ask the questions directly.',
                 idea: originalIdea,
                 hypothesis: hypothesis,
                 conversation: [] // Empty conversation for first message

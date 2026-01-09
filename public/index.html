@@ -25,9 +25,14 @@
                 placeholder="Paste your raw brain dump here..."
                 rows="8"
             ></textarea>
-            <button id="generate-hypothesis-btn" class="btn btn-primary">
-                Generate Hypothesis
-            </button>
+            <div class="button-group">
+                <button id="generate-hypothesis-btn" class="btn btn-primary">
+                    Generate Hypothesis
+                </button>
+                <button id="advanced-mode-btn" class="btn btn-primary">
+                    Advanced Mode
+                </button>
+            </div>
             <div id="hypothesis-loading" class="loading-container" style="display: none;">
                 <div class="loading-text">Generating hypothesis...</div>
                 <div class="progress-bar-container">
@@ -88,6 +93,25 @@
         <!-- Success notification -->
         <div id="success-notification" class="success-notification" style="display: none;">
             Copied to clipboard!
+        </div>
+    </div>
+
+    <!-- Advanced Mode Modal (Full Screen ChatGPT-like) -->
+    <div id="advanced-modal" class="advanced-modal" style="display: none;">
+        <div class="advanced-modal-content">
+            <div class="advanced-modal-header">
+                <h3>Advanced Mode - Refine Your Idea</h3>
+                <button id="close-advanced-modal" class="advanced-modal-close-btn">&times;</button>
+            </div>
+            <div id="advanced-chat-messages" class="advanced-chat-messages"></div>
+            <div class="advanced-chat-input-container">
+                <textarea id="advanced-chat-input" class="advanced-chat-input" placeholder="Tell me about your idea..." rows="2"></textarea>
+                <button id="advanced-send-btn" class="btn btn-primary advanced-send-btn">Send</button>
+            </div>
+            <div class="advanced-modal-footer">
+                <button id="cancel-advanced-btn" class="btn btn-secondary">Cancel</button>
+                <button id="generate-from-advanced-btn" class="btn btn-primary" disabled>Generate Hypothesis</button>
+            </div>
         </div>
     </div>
 

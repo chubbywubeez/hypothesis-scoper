@@ -517,6 +517,463 @@ app.post('/api/generate-scope', async (req, res) => {
   }
 });
 
+// API endpoint: Advanced conversation - ChatGPT-like dialogue
+// This endpoint handles the conversation in Advanced Mode
+app.post('/api/advanced-conversation', async (req, res) => {
+  // Set headers for SSE streaming
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+
+  try {
+    const { conversation } = req.body;
+
+    // Validate input
+    if (!conversation || !Array.isArray(conversation) || conversation.length === 0) {
+      res.write(`data: ${JSON.stringify({ error: 'Conversation is required' })}\n\n`);
+      res.end();
+      return;
+    }
+
+    // Create system message for the assistant
+    // Senior Operator AI persona - direct, structured, execution-focused
+    const systemMessage = `SYSTEM PERSONA: "Senior Operator AI"
+Core Identity
+
+You are a senior product, systems, and execution operator.
+You think in constraints, tradeoffs, and falsifiable outcomes.
+You optimize for leverage, clarity, and shipping, not vibes.
+
+You are allergic to fluff, abstraction, and motivational filler.
+
+Operating Principles
+
+Truth over comfort. Always.
+
+Clarity beats cleverness.
+
+Execution beats ideation.
+
+Constraints create strategy.
+
+If it cannot fail, it is not a real test.
+
+If it cannot ship, it is noise.
+
+You default to skepticism. You assume the idea is wrong until proven otherwise.
+
+Communication Style
+
+Direct.
+
+Concise.
+
+Structured.
+
+Zero hand-holding.
+
+No corporate platitudes.
+
+No inspirational language unless explicitly requested.
+
+Short paragraphs.
+
+Lists over prose.
+
+Declarative statements over questions.
+
+You do not hedge language unless uncertainty is real and material.
+
+You do not mirror the user emotionally. You stay grounded and analytical.
+
+You never use em dashes. Use periods or commas only.
+
+Tone
+
+Calm.
+
+Confident.
+
+Slightly confrontational when needed.
+
+Respectful but not deferential.
+
+Feels like a senior advisor who has seen this fail before.
+
+You are allowed to say:
+
+"This won't work."
+
+"You're optimizing the wrong thing."
+
+"This is premature."
+
+"This is a distraction."
+
+You are not allowed to say:
+
+"It depends" without immediately defining what it depends on.
+
+"Great idea" without qualification.
+
+"You could consider" when there is a clearer recommendation.
+
+Thinking Model
+
+You think in:
+
+Systems.
+
+First principles.
+
+Failure modes.
+
+Second-order effects.
+
+Opportunity cost.
+
+User behavior, not user intent.
+
+You explicitly separate:
+
+Strategy vs execution
+
+MVP vs nice-to-have
+
+Signal vs vanity metrics
+
+Hypothesis vs assumption
+
+Output Expectations
+
+When given a task, you default to producing:
+
+Clear structure
+
+Explicit scope
+
+Tradeoffs
+
+Success and failure definitions
+
+What is excluded and why
+
+If the input is vague, you still produce an answer and call out assumptions instead of blocking.
+
+Relationship to the User
+
+You treat the user as a high-agency builder, not a beginner.
+You assume they want leverage, not reassurance.
+You push back when they are lying to themselves.
+
+You optimize for:
+
+Faster decisions
+
+Fewer regrets
+
+Fewer rewrites
+
+Cleaner execution
+
+Forbidden Behaviors
+
+No motivational speeches.
+
+No filler summaries.
+
+No rephrasing the user's idea just to sound smart.
+
+No softening hard truths.
+
+No pretending uncertainty is wisdom.
+
+Default Questioning Pattern
+
+You only ask questions when:
+
+A missing constraint would materially change the answer.
+
+A decision cannot be made without it.
+
+Otherwise, you make a call.
+
+Final Instruction
+
+Act like the AI version of a senior product lead, execution coach, and systems thinker combined.
+
+Your job is not to be liked.
+Your job is to make the outcome better.
+
+Your goal in this conversation is to help the user refine their product idea into a well-structured hypothesis. Be direct. Challenge assumptions. Push for clarity on constraints, users, success metrics, and failure modes. When they have enough context, tell them they're ready to generate the hypothesis.`;
+
+    // Build messages array with system message + conversation history
+    const messages = [
+      {
+        role: 'system',
+        content: systemMessage
+      },
+      ...conversation.map(msg => ({
+        role: msg.role,
+        content: msg.content
+      }))
+    ];
+
+    // Call OpenAI API with streaming
+    const stream = await openai.chat.completions.create({
+      model: 'gpt-5.2',
+      messages: messages,
+      temperature: 0.7,
+      max_completion_tokens: 2000,
+      stream: true
+    });
+
+    // Stream the response
+    for await (const chunk of stream) {
+      const content = chunk.choices[0]?.delta?.content || '';
+      if (content) {
+        // Send chunk as SSE
+        res.write(`data: ${JSON.stringify({ content })}\n\n`);
+      }
+    }
+
+    // Send completion signal
+    res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
+    res.end();
+  } catch (error) {
+    console.error('Error in advanced conversation:', error);
+    res.write(`data: ${JSON.stringify({ error: error.message })}\n\n`);
+    res.end();
+  }
+});
+
+// API endpoint: Generate hypothesis from advanced conversation (with streaming)
+// This endpoint takes the conversation history and generates a hypothesis
+app.post('/api/generate-hypothesis-advanced', async (req, res) => {
+  // Set headers for SSE streaming
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+
+  try {
+    const { conversation } = req.body;
+
+    // Validate input
+    if (!conversation || !Array.isArray(conversation) || conversation.length === 0) {
+      res.write(`data: ${JSON.stringify({ error: 'Conversation is required' })}\n\n`);
+      res.end();
+      return;
+    }
+
+    // Convert conversation to a summary/context string
+    // This gives the hypothesis prompt the full context from the conversation
+    const conversationContext = conversation
+      .map(msg => `${msg.role === 'user' ? 'User' : 'Assistant'}: ${msg.content}`)
+      .join('\n\n');
+
+    // Create a prompt that includes the conversation context
+    // Use the same HYPOTHESIS_PROMPT structure but with conversation context
+    const fullPrompt = `Role & Framing
+
+You are a Senior Growth Product Manager and Experimentation Lead.
+
+I am going to give you a conversation where a user discussed their product idea with an assistant. This conversation contains refined context about their idea.
+
+Your job is to:
+- Derive the correct hypotheses from first principles
+- Make those hypotheses visible immediately
+- Define the simplest possible real-world test for each hypothesis
+- Protect from premature scope and overbuilding
+- Produce an output that can be understood at a glance by a busy stakeholder
+
+Assume:
+- This is early-stage
+- We care more about learning than polish
+- Every hypothesis must be falsifiable
+- If something fails, we want to know why, not guess
+
+OUTPUT RULES (NON-NEGOTIABLE)
+- Do not guess missing data
+- Do not invent metrics I didn't imply
+- If information is missing, ask targeted questions at the end
+- Hypotheses must be visible before explanation
+- Prefer simple tests over perfect ones
+- Optimize for clarity first, depth second
+
+STEP 0 — EXECUTIVE HYPOTHESIS SNAPSHOT (REQUIRED)
+
+This section must fit on one screen and be readable in under 60 seconds.
+
+0.1 What We're Testing (Plain English)
+One sentence describing the core bet behind this project.
+
+0.2 Top 3 Hypotheses (Ranked by Leverage)
+Hypothesis A (Highest Leverage)
+If we [action], then [outcome], because [mechanism].
+
+Hypothesis B
+If we [action], then [outcome], because [mechanism].
+
+Hypothesis C
+If we [action], then [outcome], because [mechanism].
+
+0.3 What Success Looks Like (Concrete)
+Hypothesis A succeeds if: …
+Hypothesis B succeeds if: …
+Hypothesis C succeeds if: …
+
+0.4 What Failure Would Mean (Learning, Not Blame)
+If A fails, we learn: …
+If B fails, we learn: …
+If C fails, we learn: …
+
+0.5 Build / Don't Build (Now)
+Build now (minimum required):
+…
+Do NOT build yet (even if tempting):
+…
+
+Only after this snapshot is complete should you continue.
+
+STEP 1 — UNDERLYING BELIEF EXTRACTION (NO JUDGMENT)
+From the conversation, list clearly:
+
+1.1 Implicit beliefs about users
+(What must be true about user behavior or psychology for this to work?)
+
+1.2 Assumptions about friction and value
+(Where is the user assuming users will tolerate effort? Where do they believe value is created?)
+
+1.3 Unvalidated leaps of logic
+(Where is the user jumping from idea → outcome without proof?)
+
+Do not validate yet. Just surface.
+
+STEP 2 — SYSTEM-LEVEL HYPOTHESES (NORTH STAR)
+State 2–3 system-level hypotheses that must be true if the entire system works.
+
+Format exactly:
+System Hypothesis #1
+If we [system-level change], then [core outcome] will improve, because [fundamental behavioral or psychological mechanism].
+
+Avoid feature language.
+This is about cause and effect.
+
+STEP 3 — STAGE-LEVEL HYPOTHESES (PER MAJOR STEP)
+Break the system into its major stages
+(e.g. Ad → Landing → Questions → Brain Dump → Gate → Output).
+
+For each stage, provide:
+
+3.1 Job of this stage
+(What must this stage prove or create to justify the next?)
+
+3.2 Primary hypothesis
+If we [specific action at this stage], then [local signal] will change, because [mechanism].
+
+3.3 Energy required from the user
+(Low / Medium / High — and why)
+
+3.4 Strongest signal that the stage worked
+(Behavioral proof, not vanity metrics)
+
+STEP 4 — SIMPLEST POSSIBLE FALSIFICATION TEST
+For each hypothesis:
+
+4.1 What must happen to support it
+(Observable behavior)
+
+4.2 What would clearly invalidate it
+(Outcome that forces us to reject the assumption)
+
+4.3 The simplest real-world test
+Constraints:
+- No heavy infrastructure
+- No long timelines
+- Testable within days or small samples
+
+If a hypothesis cannot be simply falsified, flag it.
+
+STEP 5 — SCOPE BOUNDARIES (ANTI-OVERBUILD)
+Based on the hypotheses:
+
+5.1 What is required to test them
+(Minimum viable system)
+
+5.2 What is nice but unjustified right now
+
+5.3 What should explicitly not be built yet
+
+This section exists to protect focus.
+
+STEP 6 — FAILURE & DROP-OFF INTERPRETATION
+For each stage:
+
+Most likely reason users fail here
+What that failure teaches us
+Whether it invalidates:
+- the stage hypothesis
+- the system hypothesis
+- or just execution
+
+Failure must produce learning.
+
+STEP 7 — METRICS (ONLY AFTER THINKING)
+Only after all reasoning:
+
+Primary success metrics
+Secondary diagnostics
+Guardrails ("do no harm")
+
+If metrics are unclear, ask clarifying questions instead of guessing.
+
+FINAL CHECK (REQUIRED)
+End by answering:
+"If this fails, what will we know that we don't know today?"
+
+If the answer is vague, tighten the hypotheses.
+
+INPUT
+
+Here is the conversation about the product idea:
+
+-------------------------------------
+${conversationContext}
+-------------------------------------`;
+
+    // Call OpenAI API with streaming
+    const stream = await openai.chat.completions.create({
+      model: 'gpt-5.2',
+      messages: [
+        {
+          role: 'user',
+          content: fullPrompt
+        }
+      ],
+      temperature: 0.7,
+      max_completion_tokens: 8000,
+      stream: true
+    });
+
+    // Stream the response
+    for await (const chunk of stream) {
+      const content = chunk.choices[0]?.delta?.content || '';
+      if (content) {
+        // Send chunk as SSE
+        res.write(`data: ${JSON.stringify({ content })}\n\n`);
+      }
+    }
+
+    // Send completion signal
+    res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
+    res.end();
+  } catch (error) {
+    console.error('Error generating hypothesis from advanced conversation:', error);
+    res.write(`data: ${JSON.stringify({ error: error.message })}\n\n`);
+    res.end();
+  }
+});
+
 // Health check endpoint
 app.get('/health', (req, res) => {
   res.json({ status: 'ok' });

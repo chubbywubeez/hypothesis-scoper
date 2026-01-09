@@ -29,6 +29,19 @@ const scopeLoading = document.getElementById('scope-loading');
 const errorMessage = document.getElementById('error-message');
 const successNotification = document.getElementById('success-notification');
 
+// Advanced Mode elements
+const advancedModeBtn = document.getElementById('advanced-mode-btn');
+const advancedModal = document.getElementById('advanced-modal');
+const closeAdvancedModal = document.getElementById('close-advanced-modal');
+const cancelAdvancedBtn = document.getElementById('cancel-advanced-btn');
+const generateFromAdvancedBtn = document.getElementById('generate-from-advanced-btn');
+const advancedChatMessages = document.getElementById('advanced-chat-messages');
+const advancedChatInput = document.getElementById('advanced-chat-input');
+const advancedSendBtn = document.getElementById('advanced-send-btn');
+
+// Store conversation history for advanced mode
+let advancedConversationHistory = [];
+
 // Progress bar elements
 const hypothesisProgressBar = document.getElementById('hypothesis-progress-bar');
 const hypothesisTimeElapsed = document.getElementById('hypothesis-time-elapsed');
@@ -362,6 +375,337 @@ ideaInput.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
         e.preventDefault();
         generateHypothesisBtn.click();
+    }
+});
+
+// Advanced Mode functionality
+advancedModeBtn.addEventListener('click', () => {
+    openAdvancedModal();
+});
+
+closeAdvancedModal.addEventListener('click', () => {
+    closeAdvancedModalFunc();
+});
+
+cancelAdvancedBtn.addEventListener('click', () => {
+    closeAdvancedModalFunc();
+});
+
+// Close modal with Escape key
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && advancedModal.style.display !== 'none') {
+        closeAdvancedModalFunc();
+    }
+});
+
+function openAdvancedModal() {
+    advancedModal.style.display = 'flex';
+    advancedModal.classList.add('show');
+    advancedChatInput.focus();
+    
+    // Reset conversation history
+    advancedConversationHistory = [];
+    advancedChatMessages.innerHTML = '';
+    generateFromAdvancedBtn.disabled = true;
+    
+    // Add welcome message from assistant
+    addAdvancedWelcomeMessage();
+}
+
+function closeAdvancedModalFunc() {
+    advancedModal.style.display = 'none';
+    advancedModal.classList.remove('show');
+    advancedChatInput.value = '';
+    advancedConversationHistory = [];
+}
+
+function addAdvancedWelcomeMessage() {
+    const welcomeMessage = `Share your product idea, feature, or system.
+
+I'll challenge assumptions, identify constraints, and push for clarity on:
+- The problem you're solving
+- Who your users are
+- What success and failure look like
+- What you're not building
+
+Be direct. I'll be direct back.
+
+When you have enough context, I'll tell you. Then generate the hypothesis.`;
+    
+    addAdvancedMessage('assistant', welcomeMessage);
+}
+
+function addAdvancedMessage(role, content) {
+    const messageDiv = document.createElement('div');
+    messageDiv.className = `advanced-chat-message ${role}`;
+    
+    const avatar = document.createElement('div');
+    avatar.className = 'advanced-message-avatar';
+    avatar.textContent = role === 'user' ? 'U' : 'AI';
+    
+    const messageContent = document.createElement('div');
+    messageContent.className = 'advanced-message-content';
+    messageContent.textContent = content;
+    
+    messageDiv.appendChild(avatar);
+    messageDiv.appendChild(messageContent);
+    advancedChatMessages.appendChild(messageDiv);
+    
+    // Scroll to bottom
+    advancedChatMessages.scrollTop = advancedChatMessages.scrollHeight;
+    
+    // Store in conversation history
+    advancedConversationHistory.push({ role, content });
+    
+    // Enable generate button if we have at least one user message
+    const hasUserMessage = advancedConversationHistory.some(msg => msg.role === 'user');
+    generateFromAdvancedBtn.disabled = !hasUserMessage;
+}
+
+// Send message in advanced mode
+advancedSendBtn.addEventListener('click', sendAdvancedMessage);
+
+advancedChatInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        sendAdvancedMessage();
+    }
+});
+
+async function sendAdvancedMessage() {
+    const message = advancedChatInput.value.trim();
+    
+    if (!message) {
+        return;
+    }
+    
+    // Disable input while sending
+    advancedChatInput.disabled = true;
+    advancedSendBtn.disabled = true;
+    
+    // Add user message to chat
+    addAdvancedMessage('user', message);
+    
+    // Clear input
+    advancedChatInput.value = '';
+    
+    // Add loading indicator
+    const loadingDiv = document.createElement('div');
+    loadingDiv.className = 'advanced-chat-message assistant';
+    loadingDiv.id = 'advanced-loading';
+    const loadingAvatar = document.createElement('div');
+    loadingAvatar.className = 'advanced-message-avatar';
+    loadingAvatar.textContent = 'AI';
+    const loadingContent = document.createElement('div');
+    loadingContent.className = 'advanced-message-content';
+    loadingContent.textContent = 'Thinking...';
+    loadingDiv.appendChild(loadingAvatar);
+    loadingDiv.appendChild(loadingContent);
+    advancedChatMessages.appendChild(loadingDiv);
+    advancedChatMessages.scrollTop = advancedChatMessages.scrollHeight;
+    
+    try {
+        // Call API to get assistant response
+        const response = await fetch('/api/advanced-conversation', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                conversation: advancedConversationHistory
+            })
+        });
+        
+        if (!response.ok) {
+            let errorMsg = 'Failed to get response';
+            try {
+                const errorText = await response.text();
+                if (errorText) {
+                    try {
+                        const errorData = JSON.parse(errorText);
+                        errorMsg = errorData.error || errorMsg;
+                    } catch (e) {
+                        errorMsg = errorText || errorMsg;
+                    }
+                } else {
+                    errorMsg = `Server error: ${response.status} ${response.statusText}`;
+                }
+            } catch (e) {
+                errorMsg = `Server error: ${response.status} ${response.statusText}`;
+            }
+            throw new Error(errorMsg);
+        }
+        
+        // Remove loading indicator
+        loadingDiv.remove();
+        
+        // Handle streaming response
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let fullResponse = '';
+        
+        // Create assistant message div
+        const assistantDiv = document.createElement('div');
+        assistantDiv.className = 'advanced-chat-message assistant';
+        const avatarDiv = document.createElement('div');
+        avatarDiv.className = 'advanced-message-avatar';
+        avatarDiv.textContent = 'AI';
+        const contentDiv = document.createElement('div');
+        contentDiv.className = 'advanced-message-content';
+        assistantDiv.appendChild(avatarDiv);
+        assistantDiv.appendChild(contentDiv);
+        advancedChatMessages.appendChild(assistantDiv);
+        
+        while (true) {
+            const { done, value } = await reader.read();
+            
+            if (done) break;
+            
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop();
+            
+            for (const line of lines) {
+                if (line.startsWith('data: ')) {
+                    try {
+                        const data = JSON.parse(line.slice(6));
+                        
+                        if (data.error) {
+                            throw new Error(data.error);
+                        }
+                        
+                        if (data.content) {
+                            fullResponse += data.content;
+                            contentDiv.textContent = fullResponse;
+                            advancedChatMessages.scrollTop = advancedChatMessages.scrollHeight;
+                        }
+                        
+                        if (data.done) {
+                            // Add to conversation history
+                            advancedConversationHistory.push({ role: 'assistant', content: fullResponse });
+                            return;
+                        }
+                    } catch (e) {
+                        // Skip invalid JSON lines
+                    }
+                }
+            }
+        }
+        
+    } catch (error) {
+        // Remove loading indicator if still present
+        const loadingEl = document.getElementById('advanced-loading');
+        if (loadingEl) {
+            loadingEl.remove();
+        }
+        
+        // Show error message
+        addAdvancedMessage('assistant', `Sorry, I encountered an error: ${error.message}`);
+    } finally {
+        // Re-enable input
+        advancedChatInput.disabled = false;
+        advancedSendBtn.disabled = false;
+        advancedChatInput.focus();
+    }
+}
+
+// Generate hypothesis from advanced conversation
+generateFromAdvancedBtn.addEventListener('click', async () => {
+    if (advancedConversationHistory.length === 0) {
+        return;
+    }
+    
+    // Close modal first
+    closeAdvancedModalFunc();
+    
+    // Show loading state
+    generateHypothesisBtn.disabled = true;
+    hypothesisLoading.style.display = 'block';
+    hideError();
+    hypothesisSection.style.display = 'none';
+    
+    // Start progress tracking
+    startProgress('hypothesis', ESTIMATED_TIMES.hypothesis);
+    
+    try {
+        // Prepare output area
+        hypothesisOutput.textContent = '';
+        hypothesisSection.style.display = 'block';
+        
+        // Scroll to hypothesis section
+        hypothesisSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        
+        // Call API with conversation history
+        const response = await fetch('/api/generate-hypothesis-advanced', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                conversation: advancedConversationHistory
+            })
+        });
+        
+        if (!response.ok) {
+            throw new Error('Failed to generate hypothesis');
+        }
+        
+        // Store conversation as original idea for scope generation
+        originalIdea = advancedConversationHistory.map(msg => `${msg.role === 'user' ? 'User' : 'Assistant'}: ${msg.content}`).join('\n\n');
+        
+        // Handle streaming response
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let fullText = '';
+        
+        while (true) {
+            const { done, value } = await reader.read();
+            
+            if (done) break;
+            
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop();
+            
+            for (const line of lines) {
+                if (line.startsWith('data: ')) {
+                    try {
+                        const data = JSON.parse(line.slice(6));
+                        
+                        if (data.error) {
+                            throw new Error(data.error);
+                        }
+                        
+                        if (data.content) {
+                            fullText += data.content;
+                            hypothesisOutput.textContent = fullText;
+                            hypothesisOutput.scrollTop = hypothesisOutput.scrollHeight;
+                        }
+                        
+                        if (data.done) {
+                            // Stop progress and complete
+                            stopProgress();
+                            generateHypothesisBtn.disabled = false;
+                            
+                            setTimeout(() => {
+                                hypothesisLoading.style.display = 'none';
+                            }, 500);
+                            return;
+                        }
+                    } catch (e) {
+                        // Skip invalid JSON lines
+                    }
+                }
+            }
+        }
+        
+    } catch (error) {
+        stopProgress();
+        showError(`Error: ${error.message}`);
+        generateHypothesisBtn.disabled = false;
+        hypothesisLoading.style.display = 'none';
     }
 });
 

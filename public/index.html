@@ -63,9 +63,14 @@
                         </div>
                         
                         <div id="chat-messages" class="chat-messages">
-                            <div class="chat-welcome" id="chat-welcome">
-                                <p>I'll help you refine your hypothesis by asking clarifying questions and providing feedback.</p>
-                                <p><strong>Send a message to start, or ask me to identify the top questions that would improve this hypothesis.</strong></p>
+                            <div class="chat-welcome" id="chat-welcome" style="display: none;">
+                                <div id="welcome-loading" class="welcome-loading">
+                                    <div class="thinking-indicator">
+                                        <span class="thinking-dots"></span>
+                                        <span>Analyzing your hypothesis...</span>
+                                    </div>
+                                </div>
+                                <div id="welcome-content" style="display: none;"></div>
                             </div>
                         </div>
                         

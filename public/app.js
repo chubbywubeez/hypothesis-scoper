@@ -210,10 +210,9 @@ generateHypothesisBtn.addEventListener('click', async () => {
                             hypothesisVersion = 1;
                             updateVersionBadge();
                             updateSuggestion.style.display = 'none';
-                            // Re-add welcome message
-                            if (chatWelcome) {
-                                chatMessages.appendChild(chatWelcome.cloneNode(true));
-                            }
+                            
+                            // Generate personalized welcome message based on hypothesis
+                            generateWelcomeMessage(fullText);
                             
                             setTimeout(() => {
                                 hypothesisLoading.style.display = 'none';
@@ -411,6 +410,12 @@ async function sendChatMessage(message) {
     if (chatWelcome && chatWelcome.parentNode) {
         chatWelcome.style.display = 'none';
     }
+    
+    // Hide welcome loading/content if still visible
+    const welcomeLoading = document.getElementById('welcome-loading');
+    const welcomeContent = document.getElementById('welcome-content');
+    if (welcomeLoading) welcomeLoading.style.display = 'none';
+    if (welcomeContent) welcomeContent.style.display = 'none';
     
     // Add user message to conversation
     conversationHistory.push({ role: 'user', content: message });

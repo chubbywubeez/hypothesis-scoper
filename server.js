@@ -517,6 +517,107 @@ app.post('/api/generate-scope', async (req, res) => {
   }
 });
 
+// API endpoint: Quick Scope - Generate both hypothesis and scope at once
+app.post('/api/quick-scope', async (req, res) => {
+  // Set headers for SSE streaming first (before any validation)
+  // This ensures we can send errors in SSE format if needed
+  res.setHeader('Content-Type', 'text/event-stream');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Connection', 'keep-alive');
+
+  try {
+    const { idea } = req.body;
+
+    // Validate input - send errors in SSE format
+    if (!idea || idea.trim().length === 0) {
+      res.write(`data: ${JSON.stringify({ error: 'Idea input is required' })}\n\n`);
+      res.end();
+      return;
+    }
+
+    // Quick Scope Prompt - combines hypothesis and scope in one output
+    const QUICK_SCOPE_PROMPT = `You are a Senior Product Manager and Systems Designer.
+
+I am going to give you a raw, unstructured idea about a product, feature, or system.
+
+Your job is to produce a clear, actionable output that maps out both the hypotheses and execution scope in one document.
+
+OUTPUT STRUCTURE (MUST FOLLOW EXACTLY):
+
+Hypothesis
+
+What are we trying to prove with this? Give me 2-5 hypothesis. How do we validate this was a success. What are we testing for?
+
+User Story
+
+As the Product/System, I want ___ so that ___
+
+As the Primary Operator/Persona, I want ___ so that ___
+
+As the End User, I want ___ so that ___
+
+Ideal Solution 
+
+List out all the crazy ideals for the dream solution. Do not include the MVP.
+
+MVP
+
+🟢 Required 
+
+🟡 Like to have
+
+🔴 Nice to have 
+
+Definition of done
+
+How can we objectively measure when we are done
+
+Actions
+
+Give a bullet by bullet list of task necessary to complete the task
+
+INPUT
+
+Here is the idea:
+
+{INPUT_PLACEHOLDER}`;
+
+    // Replace placeholder with actual idea
+    const fullPrompt = QUICK_SCOPE_PROMPT.replace('{INPUT_PLACEHOLDER}', idea.trim());
+
+    // Call OpenAI API with streaming
+    const stream = await openai.chat.completions.create({
+      model: 'gpt-5.2',
+      messages: [
+        {
+          role: 'user',
+          content: fullPrompt
+        }
+      ],
+      temperature: 0.7,
+      max_completion_tokens: 8000,
+      stream: true
+    });
+
+    // Stream the response
+    for await (const chunk of stream) {
+      const content = chunk.choices[0]?.delta?.content || '';
+      if (content) {
+        // Send chunk as SSE
+        res.write(`data: ${JSON.stringify({ content })}\n\n`);
+      }
+    }
+
+    // Send completion signal
+    res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
+    res.end();
+  } catch (error) {
+    console.error('Error generating quick scope:', error);
+    res.write(`data: ${JSON.stringify({ error: error.message })}\n\n`);
+    res.end();
+  }
+});
+
 // API endpoint: Advanced conversation - ChatGPT-like dialogue
 // This endpoint handles the conversation in Advanced Mode
 app.post('/api/advanced-conversation', async (req, res) => {

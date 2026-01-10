@@ -29,6 +29,9 @@
                 <button id="generate-hypothesis-btn" class="btn btn-primary">
                     Generate Hypothesis
                 </button>
+                <button id="quick-scope-btn" class="btn btn-primary">
+                    Quick Scope
+                </button>
                 <button id="advanced-mode-btn" class="btn btn-primary">
                     Advanced Mode
                 </button>
@@ -41,6 +44,16 @@
                 <div class="time-estimate">
                     <span id="hypothesis-time-elapsed">0s</span> elapsed
                     <span id="hypothesis-time-estimate" class="estimate-text"></span>
+                </div>
+            </div>
+            <div id="quick-scope-loading" class="loading-container" style="display: none;">
+                <div class="loading-text">Generating quick scope...</div>
+                <div class="progress-bar-container">
+                    <div id="quick-scope-progress-bar" class="progress-bar"></div>
+                </div>
+                <div class="time-estimate">
+                    <span id="quick-scope-time-elapsed">0s</span> elapsed
+                    <span id="quick-scope-time-estimate" class="estimate-text"></span>
                 </div>
             </div>
         </section>
@@ -85,6 +98,17 @@
                 </button>
             </div>
             <div id="scope-output" class="output"></div>
+        </section>
+
+        <!-- Quick Scope Output (combined hypothesis and scope) -->
+        <section class="card" id="quick-scope-section" style="display: none;">
+            <div class="section-header">
+                <h2>Quick Scope</h2>
+                <button id="copy-quick-scope-btn" class="btn btn-secondary btn-small">
+                    Copy to Clipboard
+                </button>
+            </div>
+            <div id="quick-scope-output" class="output hypothesis-output"></div>
         </section>
 
         <!-- Error messages -->

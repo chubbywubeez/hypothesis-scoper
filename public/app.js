@@ -11,7 +11,8 @@ let startTime = null;
 // Estimated generation times (in seconds) - based on typical API response times
 const ESTIMATED_TIMES = {
     hypothesis: 15, // ~15 seconds for hypothesis generation
-    scope: 20      // ~20 seconds for scope generation
+    scope: 20,      // ~20 seconds for scope generation
+    quickScope: 25  // ~25 seconds for quick scope (combined generation)
 };
 
 // DOM elements
@@ -28,6 +29,16 @@ const hypothesisLoading = document.getElementById('hypothesis-loading');
 const scopeLoading = document.getElementById('scope-loading');
 const errorMessage = document.getElementById('error-message');
 const successNotification = document.getElementById('success-notification');
+
+// Quick Scope elements
+const quickScopeBtn = document.getElementById('quick-scope-btn');
+const quickScopeSection = document.getElementById('quick-scope-section');
+const quickScopeOutput = document.getElementById('quick-scope-output');
+const copyQuickScopeBtn = document.getElementById('copy-quick-scope-btn');
+const quickScopeLoading = document.getElementById('quick-scope-loading');
+const quickScopeProgressBar = document.getElementById('quick-scope-progress-bar');
+const quickScopeTimeElapsed = document.getElementById('quick-scope-time-elapsed');
+const quickScopeTimeEstimate = document.getElementById('quick-scope-time-estimate');
 
 // Advanced Mode elements
 const advancedModeBtn = document.getElementById('advanced-mode-btn');
@@ -64,6 +75,10 @@ function startProgress(type, estimatedTime) {
         progressBar = scopeProgressBar;
         timeElapsed = scopeTimeElapsed;
         timeEstimate = scopeTimeEstimate;
+    } else if (type === 'quickScope') {
+        progressBar = quickScopeProgressBar;
+        timeElapsed = quickScopeTimeElapsed;
+        timeEstimate = quickScopeTimeEstimate;
     }
     
     // Reset progress bar
@@ -100,6 +115,7 @@ function stopProgress() {
     // Set progress to 100% when done
     if (hypothesisProgressBar) hypothesisProgressBar.style.width = '100%';
     if (scopeProgressBar) scopeProgressBar.style.width = '100%';
+    if (quickScopeProgressBar) quickScopeProgressBar.style.width = '100%';
     
     startTime = null;
 }
@@ -367,6 +383,142 @@ copyScopeBtn.addEventListener('click', async () => {
         document.execCommand('copy');
         document.body.removeChild(textArea);
         showSuccess();
+    }
+});
+
+// Copy quick scope to clipboard
+copyQuickScopeBtn.addEventListener('click', async () => {
+    const text = quickScopeOutput.textContent;
+    
+    if (!text) {
+        showError('No quick scope to copy.');
+        return;
+    }
+    
+    try {
+        await navigator.clipboard.writeText(text);
+        showSuccess();
+    } catch (error) {
+        // Fallback for older browsers
+        const textArea = document.createElement('textarea');
+        textArea.value = text;
+        textArea.style.position = 'fixed';
+        textArea.style.opacity = '0';
+        document.body.appendChild(textArea);
+        textArea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textArea);
+        showSuccess();
+    }
+});
+
+// Quick Scope - Generate both hypothesis and scope at once
+quickScopeBtn.addEventListener('click', async () => {
+    const idea = ideaInput.value.trim();
+    
+    // Validate input
+    if (!idea) {
+        showError('Please enter an idea before generating quick scope.');
+        return;
+    }
+    
+    // Store original idea
+    originalIdea = idea;
+    
+    // Show loading state with progress
+    quickScopeBtn.disabled = true;
+    quickScopeLoading.style.display = 'block';
+    hideError();
+    quickScopeSection.style.display = 'none';
+    hypothesisSection.style.display = 'none';
+    scopeSection.style.display = 'none';
+    
+    // Start progress tracking
+    startProgress('quickScope', ESTIMATED_TIMES.quickScope);
+    
+    try {
+        // Prepare output area
+        quickScopeOutput.textContent = '';
+        quickScopeSection.style.display = 'block';
+        
+        // Scroll to quick scope section
+        quickScopeSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        
+        // Call API with streaming
+        const response = await fetch('/api/quick-scope', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ idea })
+        });
+        
+        if (!response.ok) {
+            throw new Error('Failed to generate quick scope');
+        }
+        
+        // Handle streaming response
+        const reader = response.body.getReader();
+        const decoder = new TextDecoder();
+        let buffer = '';
+        let fullText = '';
+        
+        while (true) {
+            const { done, value } = await reader.read();
+            
+            if (done) break;
+            
+            buffer += decoder.decode(value, { stream: true });
+            const lines = buffer.split('\n');
+            buffer = lines.pop();
+            
+            for (const line of lines) {
+                if (line.startsWith('data: ')) {
+                    try {
+                        const data = JSON.parse(line.slice(6));
+                        
+                        if (data.error) {
+                            throw new Error(data.error);
+                        }
+                        
+                        if (data.content) {
+                            fullText += data.content;
+                            // Check if user is near bottom before scrolling (within 50px)
+                            const isNearBottom = quickScopeOutput.scrollHeight - quickScopeOutput.scrollTop - quickScopeOutput.clientHeight < 50;
+                            
+                            quickScopeOutput.textContent = fullText;
+                            
+                            // Only auto-scroll if user was near bottom
+                            if (isNearBottom) {
+                                // Use requestAnimationFrame for smoother scrolling
+                                requestAnimationFrame(() => {
+                                    quickScopeOutput.scrollTop = quickScopeOutput.scrollHeight;
+                                });
+                            }
+                        }
+                        
+                        if (data.done) {
+                            // Stop progress and complete
+                            stopProgress();
+                            quickScopeBtn.disabled = false;
+                            
+                            setTimeout(() => {
+                                quickScopeLoading.style.display = 'none';
+                            }, 500);
+                            return;
+                        }
+                    } catch (e) {
+                        // Skip invalid JSON lines
+                    }
+                }
+            }
+        }
+        
+    } catch (error) {
+        stopProgress();
+        showError(`Error: ${error.message}`);
+        quickScopeBtn.disabled = false;
+        quickScopeLoading.style.display = 'none';
     }
 });
 

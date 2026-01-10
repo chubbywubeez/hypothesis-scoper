@@ -101,8 +101,21 @@ If you prefer to deploy without GitHub:
 
 ## Environment Variables
 
-- `OPENAI_API_KEY` (required): Your OpenAI API key
+Create a `.env` file in the project root (see `.env.example` for template):
+
+**Required:**
+- `OPENAI_API_KEY`: Your OpenAI API key
+
+**Optional (for Confluence export feature):**
+- `CONFLUENCE_DOMAIN`: Your Confluence domain (e.g., `yourcompany.atlassian.net`)
+- `CONFLUENCE_EMAIL`: Your Confluence account email
+- `CONFLUENCE_API_TOKEN`: Your Confluence API token ([create one here](https://id.atlassian.com/manage-profile/security/api-tokens))
+- `CONFLUENCE_SPACE_KEY`: Your Confluence space key (e.g., `NM`, `PROD`, `ENG`)
+
+**Other:**
 - `PORT` (optional): Server port (defaults to 3000)
+
+**Note:** Never commit your `.env` file - it's already in `.gitignore`.
 
 ## Project Structure
 

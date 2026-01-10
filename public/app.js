@@ -4,9 +4,198 @@
 // Store original idea for scope generation
 let originalIdea = '';
 
+// Store raw markdown content for export (before formatting for display)
+let rawHypothesisContent = '';
+let rawScopeContent = '';
+let rawQuickScopeContent = '';
+
 // Progress tracking for loading bars
 let progressInterval = null;
 let startTime = null;
+
+// Helper function: Convert markdown to HTML for nice display in the app
+// This renders markdown as formatted HTML so it looks nice in the browser
+function markdownToHtml(markdown) {
+    if (!markdown) return '';
+    
+    // Split into lines for processing
+    const lines = markdown.split('\n');
+    const output = [];
+    let inList = false;
+    let listType = null; // 'ul' or 'ol'
+    
+    for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        const trimmed = line.trim();
+        
+        if (!trimmed) {
+            // Empty line - close current list if open, add paragraph break
+            if (inList) {
+                output.push(`</${listType}>`);
+                inList = false;
+                listType = null;
+            }
+            continue;
+        }
+        
+        // Check for headers
+        if (trimmed.startsWith('###### ')) {
+            if (inList) {
+                output.push(`</${listType}>`);
+                inList = false;
+                listType = null;
+            }
+            output.push(`<h6>${escapeHtml(trimmed.substring(7))}</h6>`);
+            continue;
+        } else if (trimmed.startsWith('##### ')) {
+            if (inList) {
+                output.push(`</${listType}>`);
+                inList = false;
+                listType = null;
+            }
+            output.push(`<h5>${escapeHtml(trimmed.substring(6))}</h5>`);
+            continue;
+        } else if (trimmed.startsWith('#### ')) {
+            if (inList) {
+                output.push(`</${listType}>`);
+                inList = false;
+                listType = null;
+            }
+            output.push(`<h4>${escapeHtml(trimmed.substring(5))}</h4>`);
+            continue;
+        } else if (trimmed.startsWith('### ')) {
+            if (inList) {
+                output.push(`</${listType}>`);
+                inList = false;
+                listType = null;
+            }
+            output.push(`<h3>${escapeHtml(trimmed.substring(4))}</h3>`);
+            continue;
+        } else if (trimmed.startsWith('## ')) {
+            if (inList) {
+                output.push(`</${listType}>`);
+                inList = false;
+                listType = null;
+            }
+            output.push(`<h2>${escapeHtml(trimmed.substring(3))}</h2>`);
+            continue;
+        } else if (trimmed.startsWith('# ')) {
+            if (inList) {
+                output.push(`</${listType}>`);
+                inList = false;
+                listType = null;
+            }
+            output.push(`<h1>${escapeHtml(trimmed.substring(2))}</h1>`);
+            continue;
+        }
+        
+        // Check for unordered list
+        if (/^[-*•]\s/.test(trimmed)) {
+            if (!inList || listType !== 'ul') {
+                if (inList) {
+                    output.push(`</${listType}>`);
+                }
+                output.push('<ul>');
+                inList = true;
+                listType = 'ul';
+            }
+            const content = formatInlineMarkdown(trimmed.replace(/^[-*•]\s+/, ''));
+            output.push(`<li>${content}</li>`);
+            continue;
+        }
+        
+        // Check for ordered list
+        if (/^\d+\.\s/.test(trimmed)) {
+            if (!inList || listType !== 'ol') {
+                if (inList) {
+                    output.push(`</${listType}>`);
+                }
+                output.push('<ol>');
+                inList = true;
+                listType = 'ol';
+            }
+            const content = formatInlineMarkdown(trimmed.replace(/^\d+\.\s+/, ''));
+            output.push(`<li>${content}</li>`);
+            continue;
+        }
+        
+        // Regular paragraph line
+        if (inList) {
+            output.push(`</${listType}>`);
+            inList = false;
+            listType = null;
+        }
+        
+        // Format inline markdown and add as paragraph (or combine with previous paragraph)
+        const formatted = formatInlineMarkdown(trimmed);
+        output.push(`<p>${formatted}</p>`);
+    }
+    
+    // Close any open list
+    if (inList) {
+        output.push(`</${listType}>`);
+    }
+    
+    return output.join('\n');
+}
+
+// Helper: Format inline markdown (bold, italic, code)
+function formatInlineMarkdown(text) {
+    if (!text) return '';
+    
+    let html = escapeHtml(text);
+    
+    // Bold: **text** (must be before italic)
+    html = html.replace(/\*\*([^*]+?)\*\*/g, '<strong>$1</strong>');
+    html = html.replace(/__([^_]+?)__/g, '<strong>$1</strong>');
+    
+    // Code: `code`
+    html = html.replace(/`([^`]+?)`/g, '<code>$1</code>');
+    
+    // Italic: *text* (avoid matching **)
+    html = html.replace(/(?<!\*)\*([^*]+?)\*(?!\*)/g, '<em>$1</em>');
+    
+    return html;
+}
+
+// Helper: Escape HTML entities
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// Helper: Format plain text with headings (for Quick Scope which doesn't use markdown)
+// Detects common heading patterns and converts them to HTML headings
+function formatPlainTextWithHeadings(text) {
+    if (!text) return '';
+    
+    const lines = text.split('\n');
+    const output = [];
+    
+    for (let i = 0; i < lines.length; i++) {
+        const line = lines[i].trim();
+        if (!line) {
+            output.push('<br/>');
+            continue;
+        }
+        
+        // Detect common heading patterns (word followed by colon on its own line)
+        // Like "Hypothesis:", "User Story:", "MVP:", etc.
+        if (line.match(/^[A-Z][a-zA-Z\s]+:$/) && (i === 0 || lines[i-1].trim() === '')) {
+            // Check if next line is not empty (so it's not just a label)
+            if (i + 1 < lines.length && lines[i + 1].trim() !== '') {
+                output.push(`<h2>${escapeHtml(line.slice(0, -1))}</h2>`); // Remove colon
+                continue;
+            }
+        }
+        
+        // Format as paragraph
+        output.push(`<p>${formatInlineMarkdown(escapeHtml(line))}</p>`);
+    }
+    
+    return output.join('\n');
+}
 
 // Estimated generation times (in seconds) - based on typical API response times
 const ESTIMATED_TIMES = {
@@ -39,6 +228,22 @@ const quickScopeLoading = document.getElementById('quick-scope-loading');
 const quickScopeProgressBar = document.getElementById('quick-scope-progress-bar');
 const quickScopeTimeElapsed = document.getElementById('quick-scope-time-elapsed');
 const quickScopeTimeEstimate = document.getElementById('quick-scope-time-estimate');
+
+// Confluence Export elements
+const exportHypothesisConfluenceBtn = document.getElementById('export-hypothesis-confluence-btn');
+const exportScopeConfluenceBtn = document.getElementById('export-scope-confluence-btn');
+const exportQuickScopeConfluenceBtn = document.getElementById('export-quick-scope-confluence-btn');
+const confluenceModal = document.getElementById('confluence-modal');
+const closeConfluenceModal = document.getElementById('close-confluence-modal');
+const confluenceCancelBtn = document.getElementById('confluence-cancel-btn');
+const confluenceExportBtn = document.getElementById('confluence-export-btn');
+const confluenceStatus = document.getElementById('confluence-status');
+const confluencePageTitle = document.getElementById('confluence-page-title');
+const confluenceParentId = document.getElementById('confluence-parent-id');
+
+// Store current content to export (set when export button is clicked)
+let currentContentToExport = '';
+let currentExportType = ''; // 'hypothesis', 'scope', or 'quickScope'
 
 // Advanced Mode elements
 const advancedModeBtn = document.getElementById('advanced-mode-btn');
@@ -144,7 +349,8 @@ generateHypothesisBtn.addEventListener('click', async () => {
     
     try {
         // Prepare output area
-        hypothesisOutput.textContent = '';
+        hypothesisOutput.innerHTML = '';
+        rawHypothesisContent = ''; // Reset raw content
         hypothesisSection.style.display = 'block';
         
         // Scroll to hypothesis section
@@ -189,10 +395,12 @@ generateHypothesisBtn.addEventListener('click', async () => {
                         
                         if (data.content) {
                             fullText += data.content;
+                            rawHypothesisContent = fullText; // Store raw markdown for export
                             // Check if user is near bottom before scrolling (within 50px)
                             const isNearBottom = hypothesisOutput.scrollHeight - hypothesisOutput.scrollTop - hypothesisOutput.clientHeight < 50;
                             
-                            hypothesisOutput.textContent = fullText;
+                            // Display formatted HTML (rendered from markdown)
+                            hypothesisOutput.innerHTML = markdownToHtml(fullText);
                             
                             // Only auto-scroll if user was near bottom
                             if (isNearBottom) {
@@ -230,7 +438,7 @@ generateHypothesisBtn.addEventListener('click', async () => {
 
 // Generate scope from hypothesis
 generateScopeBtn.addEventListener('click', async () => {
-    const hypothesis = hypothesisOutput.textContent.trim();
+    const hypothesis = rawHypothesisContent || hypothesisOutput.textContent.trim();
     
     if (!hypothesis) {
         showError('Please generate a hypothesis first.');
@@ -248,7 +456,8 @@ generateScopeBtn.addEventListener('click', async () => {
     
     try {
         // Prepare output area
-        scopeOutput.textContent = '';
+        scopeOutput.innerHTML = '';
+        rawScopeContent = ''; // Reset raw content
         scopeSection.style.display = 'block';
         
         // Scroll to scope section
@@ -296,10 +505,13 @@ generateScopeBtn.addEventListener('click', async () => {
                         
                         if (data.content) {
                             fullText += data.content;
+                            rawScopeContent = fullText; // Store raw markdown
+                            
                             // Check if user is near bottom before scrolling (within 50px)
                             const isNearBottom = scopeOutput.scrollHeight - scopeOutput.scrollTop - scopeOutput.clientHeight < 50;
                             
-                            scopeOutput.textContent = fullText;
+                            // Display formatted HTML (rendered from markdown)
+                            scopeOutput.innerHTML = markdownToHtml(fullText);
                             
                             // Only auto-scroll if user was near bottom
                             if (isNearBottom) {
@@ -412,6 +624,135 @@ copyQuickScopeBtn.addEventListener('click', async () => {
     }
 });
 
+// Confluence Export handlers
+// Open Confluence modal and store content to export
+exportHypothesisConfluenceBtn.addEventListener('click', () => {
+    const text = rawHypothesisContent || hypothesisOutput.textContent.trim();
+    if (!text) {
+        showError('No hypothesis to export.');
+        return;
+    }
+    currentContentToExport = text; // Use raw markdown for export
+    currentExportType = 'hypothesis';
+    openConfluenceModal();
+});
+
+exportScopeConfluenceBtn.addEventListener('click', () => {
+    const text = rawScopeContent || scopeOutput.textContent.trim();
+    if (!text) {
+        showError('No scope to export.');
+        return;
+    }
+    currentContentToExport = text; // Use raw markdown for export
+    currentExportType = 'scope';
+    openConfluenceModal();
+});
+
+exportQuickScopeConfluenceBtn.addEventListener('click', () => {
+    const text = rawQuickScopeContent || quickScopeOutput.textContent.trim();
+    if (!text) {
+        showError('No quick scope to export.');
+        return;
+    }
+    currentContentToExport = text; // Use raw content for export (will be formatted by server)
+    currentExportType = 'quickScope';
+    openConfluenceModal();
+});
+
+// Open Confluence modal function
+function openConfluenceModal() {
+    // Set default page title based on content type
+    // Credentials are hardcoded on the server, so we only need page title
+    const defaultTitle = currentExportType === 'hypothesis' 
+        ? 'Hypothesis: ' + (ideaInput.value.trim().substring(0, 50) || 'New Hypothesis')
+        : currentExportType === 'scope'
+        ? 'Scope: ' + (ideaInput.value.trim().substring(0, 50) || 'New Scope')
+        : 'Quick Scope: ' + (ideaInput.value.trim().substring(0, 50) || 'New Quick Scope');
+    confluencePageTitle.value = defaultTitle;
+    
+    // Clear parent ID
+    confluenceParentId.value = '';
+    
+    // Hide any previous status messages
+    confluenceStatus.style.display = 'none';
+    
+    // Show modal
+    confluenceModal.style.display = 'flex';
+    confluenceModal.classList.add('show');
+}
+
+// Close Confluence modal function
+function closeConfluenceModalFunc() {
+    confluenceModal.style.display = 'none';
+    confluenceModal.classList.remove('show');
+    confluenceStatus.style.display = 'none';
+}
+
+// Close modal handlers
+closeConfluenceModal.addEventListener('click', closeConfluenceModalFunc);
+confluenceCancelBtn.addEventListener('click', closeConfluenceModalFunc);
+
+// Export to Confluence handler
+confluenceExportBtn.addEventListener('click', async () => {
+    // Validate page title (only required field now)
+    const pageTitle = confluencePageTitle.value.trim();
+    
+    if (!pageTitle) {
+        showConfluenceStatus('Please enter a page title.', 'error');
+        return;
+    }
+    
+    // Show loading state
+    confluenceExportBtn.disabled = true;
+    confluenceExportBtn.textContent = 'Exporting...';
+    showConfluenceStatus('Exporting to Confluence...', 'success');
+    
+    try {
+        // Use hardcoded credentials - no need to send from client
+        const response = await fetch('/api/export-to-confluence', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                // Credentials are hardcoded on server, only send content and metadata
+                pageTitle,
+                parentId: confluenceParentId.value.trim() || null,
+                content: currentContentToExport
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (!response.ok) {
+            throw new Error(data.error || 'Failed to export to Confluence');
+        }
+        
+        // Success
+        showConfluenceStatus(`Successfully exported to Confluence! Page ID: ${data.pageId}. <a href="${data.url}" target="_blank">View page</a>`, 'success');
+        
+        // Close modal after 3 seconds
+        setTimeout(() => {
+            closeConfluenceModalFunc();
+        }, 3000);
+        
+    } catch (error) {
+        showConfluenceStatus(`Error: ${error.message}`, 'error');
+    } finally {
+        confluenceExportBtn.disabled = false;
+        confluenceExportBtn.textContent = 'Export to Confluence';
+    }
+});
+
+// Show status message in Confluence modal
+function showConfluenceStatus(message, type) {
+    confluenceStatus.textContent = '';
+    confluenceStatus.innerHTML = message;
+    confluenceStatus.className = `confluence-status ${type}`;
+    confluenceStatus.style.display = 'block';
+    confluenceStatus.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
 // Quick Scope - Generate both hypothesis and scope at once
 quickScopeBtn.addEventListener('click', async () => {
     const idea = ideaInput.value.trim();
@@ -438,7 +779,8 @@ quickScopeBtn.addEventListener('click', async () => {
     
     try {
         // Prepare output area
-        quickScopeOutput.textContent = '';
+        quickScopeOutput.innerHTML = '';
+        rawQuickScopeContent = ''; // Reset raw content
         quickScopeSection.style.display = 'block';
         
         // Scroll to quick scope section
@@ -483,10 +825,17 @@ quickScopeBtn.addEventListener('click', async () => {
                         
                         if (data.content) {
                             fullText += data.content;
+                            rawQuickScopeContent = fullText; // Store raw content
+                            
                             // Check if user is near bottom before scrolling (within 50px)
                             const isNearBottom = quickScopeOutput.scrollHeight - quickScopeOutput.scrollTop - quickScopeOutput.clientHeight < 50;
                             
-                            quickScopeOutput.textContent = fullText;
+                            // For Quick Scope, detect plain text headings and format them
+                            // If it has markdown headers, render them. Otherwise, display as-is with basic formatting
+                            const formattedContent = fullText.includes('##') || fullText.includes('###') 
+                                ? markdownToHtml(fullText) 
+                                : formatPlainTextWithHeadings(fullText);
+                            quickScopeOutput.innerHTML = formattedContent;
                             
                             // Only auto-scroll if user was near bottom
                             if (isNearBottom) {
@@ -848,10 +1197,12 @@ generateFromAdvancedBtn.addEventListener('click', async () => {
                         
                         if (data.content) {
                             fullText += data.content;
+                            rawHypothesisContent = fullText; // Store raw markdown for export
                             // Check if user is near bottom before scrolling (within 50px)
                             const isNearBottom = hypothesisOutput.scrollHeight - hypothesisOutput.scrollTop - hypothesisOutput.clientHeight < 50;
                             
-                            hypothesisOutput.textContent = fullText;
+                            // Display formatted HTML (rendered from markdown)
+                            hypothesisOutput.innerHTML = markdownToHtml(fullText);
                             
                             // Only auto-scroll if user was near bottom
                             if (isNearBottom) {
@@ -865,7 +1216,7 @@ generateFromAdvancedBtn.addEventListener('click', async () => {
                         if (data.done) {
                             // Stop progress and complete
                             stopProgress();
-                            generateHypothesisBtn.disabled = false;
+                            generateFromAdvancedBtn.disabled = false;
                             
                             setTimeout(() => {
                                 hypothesisLoading.style.display = 'none';
@@ -882,7 +1233,7 @@ generateFromAdvancedBtn.addEventListener('click', async () => {
     } catch (error) {
         stopProgress();
         showError(`Error: ${error.message}`);
-        generateHypothesisBtn.disabled = false;
+        generateFromAdvancedBtn.disabled = false;
         hypothesisLoading.style.display = 'none';
     }
 });

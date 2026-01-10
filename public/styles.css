@@ -243,10 +243,10 @@ textarea:focus {
     border: 1px solid #A3A6B4; /* Vantum Light Gray border */
     border-radius: 4px;
     padding: 20px;
-    white-space: pre-wrap;
-    font-family: 'Courier New', monospace;
-    font-size: 13px;
-    line-height: 1.6;
+    white-space: normal; /* Changed from pre-wrap to allow HTML formatting */
+    font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif; /* Changed from monospace */
+    font-size: 14px;
+    line-height: 1.7;
     max-height: 600px;
     overflow-y: auto;
     overflow-x: hidden;
@@ -414,7 +414,7 @@ textarea:focus {
     border: 2px solid #A3A6B4; /* Vantum Light Gray border - matches textarea */
     border-radius: 6px;
     padding: 25px;
-    white-space: pre-wrap;
+    white-space: normal; /* Changed from pre-wrap to allow HTML formatting */
     font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
     font-size: 14px;
     line-height: 1.7;
@@ -430,6 +430,117 @@ textarea:focus {
     will-change: scroll-position;
     word-wrap: break-word;
     word-break: break-word;
+}
+
+/* Styling for rendered HTML content in output areas */
+.hypothesis-output h1,
+.output h1,
+.quick-scope-output h1 {
+    font-size: 1.8em;
+    font-weight: 700;
+    margin: 1.5em 0 0.8em 0;
+    color: #FFFFFF;
+    border-bottom: 2px solid #007A7A;
+    padding-bottom: 0.5em;
+}
+
+.hypothesis-output h2,
+.output h2,
+.quick-scope-output h2 {
+    font-size: 1.5em;
+    font-weight: 600;
+    margin: 1.3em 0 0.6em 0;
+    color: #FFFFFF;
+    border-bottom: 1px solid #2A2E39;
+    padding-bottom: 0.4em;
+}
+
+.hypothesis-output h3,
+.output h3,
+.quick-scope-output h3 {
+    font-size: 1.2em;
+    font-weight: 600;
+    margin: 1em 0 0.5em 0;
+    color: #FFFFFF;
+}
+
+.hypothesis-output h4,
+.output h4,
+.quick-scope-output h4 {
+    font-size: 1.1em;
+    font-weight: 600;
+    margin: 0.8em 0 0.4em 0;
+    color: #FFFFFF;
+}
+
+.hypothesis-output h5,
+.output h5,
+.quick-scope-output h5 {
+    font-size: 1em;
+    font-weight: 600;
+    margin: 0.6em 0 0.3em 0;
+    color: #FFFFFF;
+}
+
+.hypothesis-output h6,
+.output h6,
+.quick-scope-output h6 {
+    font-size: 0.9em;
+    font-weight: 600;
+    margin: 0.5em 0 0.3em 0;
+    color: #A3A6B4;
+}
+
+.hypothesis-output p,
+.output p,
+.quick-scope-output p {
+    margin: 0.8em 0;
+    line-height: 1.7;
+    color: #FFFFFF;
+}
+
+.hypothesis-output ul,
+.hypothesis-output ol,
+.output ul,
+.output ol,
+.quick-scope-output ul,
+.quick-scope-output ol {
+    margin: 0.8em 0;
+    padding-left: 2em;
+    color: #FFFFFF;
+}
+
+.hypothesis-output li,
+.output li,
+.quick-scope-output li {
+    margin: 0.4em 0;
+    line-height: 1.6;
+    color: #FFFFFF;
+}
+
+.hypothesis-output strong,
+.output strong,
+.quick-scope-output strong {
+    font-weight: 600;
+    color: #FFFFFF;
+}
+
+.hypothesis-output em,
+.output em,
+.quick-scope-output em {
+    font-style: italic;
+    color: #FFFFFF;
+}
+
+.hypothesis-output code,
+.output code,
+.quick-scope-output code {
+    background-color: #1A1E29;
+    color: #00D9FF;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-family: 'Courier New', monospace;
+    font-size: 0.9em;
 }
 
 .hypothesis-output:focus-within {
@@ -734,6 +845,185 @@ textarea:focus {
     }
     
     .advanced-modal-footer .btn {
+        width: 100%;
+    }
+}
+
+/* Header Actions - for multiple buttons in section header */
+.header-actions {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
+@media (max-width: 768px) {
+    .header-actions {
+        width: 100%;
+        flex-direction: column;
+    }
+    
+    .header-actions .btn-small {
+        width: 100%;
+    }
+}
+
+/* Confluence Export Modal */
+.confluence-modal {
+    display: none;
+    position: fixed;
+    z-index: 3000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.7);
+    animation: fadeIn 0.2s ease;
+}
+
+.confluence-modal.show {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.confluence-modal-content {
+    background-color: #1A1E29; /* Vantum Charcoal */
+    border-radius: 8px;
+    width: 90%;
+    max-width: 600px;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+    display: flex;
+    flex-direction: column;
+}
+
+.confluence-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px 30px;
+    border-bottom: 1px solid #2A2E39;
+}
+
+.confluence-modal-header h3 {
+    margin: 0;
+    color: #FFFFFF;
+    font-size: 1.5em;
+}
+
+.confluence-modal-close-btn {
+    background: none;
+    border: none;
+    color: #FFFFFF;
+    font-size: 32px;
+    cursor: pointer;
+    line-height: 1;
+    padding: 0;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: color 0.2s;
+}
+
+.confluence-modal-close-btn:hover {
+    color: #A3A6B4;
+}
+
+.confluence-modal-body {
+    padding: 30px;
+    flex: 1;
+    overflow-y: auto;
+}
+
+.confluence-form-group {
+    margin-bottom: 20px;
+}
+
+.confluence-form-group label {
+    display: block;
+    margin-bottom: 8px;
+    color: #FFFFFF;
+    font-weight: 500;
+}
+
+.confluence-form-group input {
+    width: 100%;
+    padding: 12px;
+    background-color: #0A0E17; /* Vantum Midnight Black */
+    border: 2px solid #2A2E39;
+    border-radius: 6px;
+    color: #FFFFFF;
+    font-size: 14px;
+    font-family: inherit;
+    box-sizing: border-box;
+    transition: border-color 0.2s;
+}
+
+.confluence-form-group input:focus {
+    outline: none;
+    border-color: #007A7A; /* Vantum Teal */
+}
+
+.confluence-form-group small {
+    display: block;
+    margin-top: 6px;
+    color: #A3A6B4;
+    font-size: 12px;
+}
+
+.confluence-form-group small a {
+    color: #007A7A;
+    text-decoration: none;
+}
+
+.confluence-form-group small a:hover {
+    text-decoration: underline;
+}
+
+.confluence-modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    padding: 20px 30px;
+    border-top: 1px solid #2A2E39;
+}
+
+.confluence-status {
+    padding: 15px 30px;
+    margin-top: 0;
+    border-top: 1px solid #2A2E39;
+}
+
+.confluence-status.success {
+    background-color: rgba(0, 200, 0, 0.1);
+    color: #4CAF50;
+}
+
+.confluence-status.error {
+    background-color: rgba(200, 0, 0, 0.1);
+    color: #F44336;
+}
+
+@media (max-width: 768px) {
+    .confluence-modal-content {
+        width: 95%;
+        max-height: 95vh;
+    }
+    
+    .confluence-modal-header,
+    .confluence-modal-body,
+    .confluence-modal-footer {
+        padding: 20px;
+    }
+    
+    .confluence-modal-footer {
+        flex-direction: column;
+    }
+    
+    .confluence-modal-footer .btn {
         width: 100%;
     }
 }

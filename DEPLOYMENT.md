@@ -45,12 +45,21 @@ git push -u origin main
    - Choose your `hypothesis-scoper` repository
    - Railway will automatically detect the Node.js project
 
-3. **Add Environment Variable**
+3. **Add Environment Variables**
    - In your Railway project dashboard, click on your service
    - Go to the "Variables" tab
-   - Click "New Variable"
-   - Add: `OPENAI_API_KEY` = `your_actual_openai_api_key_here`
-   - Click "Add"
+   - Click "New Variable" for each of the following:
+   
+   **Required:**
+   - `OPENAI_API_KEY` = `your_actual_openai_api_key_here`
+   
+   **For Confluence Export Feature (optional):**
+   - `CONFLUENCE_DOMAIN` = `yourcompany.atlassian.net` (e.g., `theahamomentspace.atlassian.net`)
+   - `CONFLUENCE_EMAIL` = `your.email@company.com`
+   - `CONFLUENCE_API_TOKEN` = `your_confluence_api_token_here`
+   - `CONFLUENCE_SPACE_KEY` = `YOUR_SPACE_KEY` (e.g., `NM`)
+   
+   - Click "Add" after each variable
 
 4. **Deploy**
    - Railway will automatically start deploying when you connect the repo
@@ -94,5 +103,7 @@ Railway will automatically detect the push and redeploy!
 
 **Environment variables:**
 - Railway automatically sets `PORT` - you don't need to add it
-- Only add `OPENAI_API_KEY` to Railway variables
+- **Required:** `OPENAI_API_KEY` - your OpenAI API key
+- **Optional (for Confluence export):** `CONFLUENCE_DOMAIN`, `CONFLUENCE_EMAIL`, `CONFLUENCE_API_TOKEN`, `CONFLUENCE_SPACE_KEY`
 - Never commit `.env` file (it's in `.gitignore`)
+- See `.env.example` for the format of environment variables

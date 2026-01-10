@@ -62,9 +62,14 @@
         <section class="card" id="hypothesis-section" style="display: none;">
             <div class="section-header">
                 <h2>2. Your Hypothesis</h2>
-                <button id="copy-hypothesis-btn" class="btn btn-secondary btn-small">
-                    Copy to Clipboard
-                </button>
+                <div class="header-actions">
+                    <button id="export-hypothesis-confluence-btn" class="btn btn-secondary btn-small">
+                        Export to Confluence
+                    </button>
+                    <button id="copy-hypothesis-btn" class="btn btn-secondary btn-small">
+                        Copy to Clipboard
+                    </button>
+                </div>
             </div>
             
             <!-- Hypothesis Output -->
@@ -93,9 +98,14 @@
         <section class="card" id="scope-section" style="display: none;">
             <div class="section-header">
                 <h2>3. Generated Scope</h2>
-                <button id="copy-scope-btn" class="btn btn-secondary btn-small">
-                    Copy to Clipboard
-                </button>
+                <div class="header-actions">
+                    <button id="export-scope-confluence-btn" class="btn btn-secondary btn-small">
+                        Export to Confluence
+                    </button>
+                    <button id="copy-scope-btn" class="btn btn-secondary btn-small">
+                        Copy to Clipboard
+                    </button>
+                </div>
             </div>
             <div id="scope-output" class="output"></div>
         </section>
@@ -104,9 +114,14 @@
         <section class="card" id="quick-scope-section" style="display: none;">
             <div class="section-header">
                 <h2>Quick Scope</h2>
-                <button id="copy-quick-scope-btn" class="btn btn-secondary btn-small">
-                    Copy to Clipboard
-                </button>
+                <div class="header-actions">
+                    <button id="export-quick-scope-confluence-btn" class="btn btn-secondary btn-small">
+                        Export to Confluence
+                    </button>
+                    <button id="copy-quick-scope-btn" class="btn btn-secondary btn-small">
+                        Copy to Clipboard
+                    </button>
+                </div>
             </div>
             <div id="quick-scope-output" class="output hypothesis-output"></div>
         </section>
@@ -141,6 +156,33 @@
             <div class="advanced-modal-footer">
                 <button id="generate-from-advanced-btn" class="btn btn-primary" disabled>Generate Hypothesis</button>
             </div>
+        </div>
+    </div>
+
+    <!-- Confluence Export Modal -->
+    <div id="confluence-modal" class="confluence-modal" style="display: none;">
+        <div class="confluence-modal-content">
+            <div class="confluence-modal-header">
+                <h3>Export to Confluence</h3>
+                <button id="close-confluence-modal" class="confluence-modal-close-btn">&times;</button>
+            </div>
+            <div class="confluence-modal-body">
+                <div class="confluence-form-group">
+                    <label for="confluence-page-title">Page Title *</label>
+                    <input type="text" id="confluence-page-title" placeholder="Hypothesis: [Your Idea Name]" />
+                    <small>The title for the new Confluence page (will be created in the NM space)</small>
+                </div>
+                <div class="confluence-form-group">
+                    <label for="confluence-parent-id">Parent Page ID (Optional)</label>
+                    <input type="text" id="confluence-parent-id" placeholder="123456789" />
+                    <small>If you want this page under a parent page, enter the parent page ID</small>
+                </div>
+            </div>
+            <div class="confluence-modal-footer">
+                <button id="confluence-cancel-btn" class="btn btn-secondary">Cancel</button>
+                <button id="confluence-export-btn" class="btn btn-primary">Export to Confluence</button>
+            </div>
+            <div id="confluence-status" class="confluence-status" style="display: none;"></div>
         </div>
     </div>
 

@@ -4,6 +4,7 @@
 const express = require('express');
 const cors = require('cors');
 const OpenAI = require('openai');
+const https = require('https');
 require('dotenv').config();
 
 const app = express();
@@ -12,7 +13,8 @@ const PORT = process.env.PORT || 3000;
 // Middleware
 app.use(cors());
 app.use(express.json());
-app.use(express.static('public'));
+
+// Note: API routes are defined below, before static file serving
 
 // Debug: Log environment info (first few chars only for security)
 console.log('=== ENVIRONMENT DEBUG ===');
@@ -23,12 +25,18 @@ console.log('Has OPENAI_API_KEY:', !!process.env.OPENAI_API_KEY);
 console.log('OPENAI_API_KEY length:', process.env.OPENAI_API_KEY ? process.env.OPENAI_API_KEY.length : 0);
 console.log('=======================');
 
-// Check for required environment variable
+// Check for required environment variables
 if (!process.env.OPENAI_API_KEY) {
   console.error('ERROR: OPENAI_API_KEY environment variable is not set!');
-  console.error('Please add OPENAI_API_KEY to your Railway environment variables.');
+  console.error('Please add OPENAI_API_KEY to your .env file (locally) or Railway environment variables (deployment).');
   console.error('Debug: All env vars:', Object.keys(process.env).filter(k => k.includes('OPENAI')).join(', ') || 'None found');
   process.exit(1);
+}
+
+// Warn about missing Confluence credentials (optional feature, so we don't exit)
+if (!process.env.CONFLUENCE_DOMAIN || !process.env.CONFLUENCE_EMAIL || !process.env.CONFLUENCE_API_TOKEN || !process.env.CONFLUENCE_SPACE_KEY) {
+  console.warn('WARNING: Confluence credentials not set. Confluence export feature will not work.');
+  console.warn('Required: CONFLUENCE_DOMAIN, CONFLUENCE_EMAIL, CONFLUENCE_API_TOKEN, CONFLUENCE_SPACE_KEY');
 }
 
 // Initialize OpenAI client
@@ -1075,14 +1083,346 @@ ${conversationContext}
   }
 });
 
+// Helper function: Convert markdown text to Confluence storage format
+// Confluence uses HTML-like storage format, so we convert markdown to proper HTML
+function convertToConfluenceStorage(text) {
+  if (!text) return '';
+  
+  // Split text into lines for processing
+  const lines = text.split('\n');
+  const output = [];
+  let i = 0;
+  
+  while (i < lines.length) {
+    const line = lines[i].trim();
+    
+    // Skip empty lines (they'll be handled by paragraph spacing)
+    if (!line) {
+      i++;
+      continue;
+    }
+    
+    // Check for headers (must be at start of line)
+    if (line.startsWith('###### ')) {
+      output.push(`<h6>${escapeHtml(line.substring(7))}</h6>`);
+      i++;
+      continue;
+    } else if (line.startsWith('##### ')) {
+      output.push(`<h5>${escapeHtml(line.substring(6))}</h5>`);
+      i++;
+      continue;
+    } else if (line.startsWith('#### ')) {
+      output.push(`<h4>${escapeHtml(line.substring(5))}</h4>`);
+      i++;
+      continue;
+    } else if (line.startsWith('### ')) {
+      output.push(`<h3>${escapeHtml(line.substring(4))}</h3>`);
+      i++;
+      continue;
+    } else if (line.startsWith('## ')) {
+      output.push(`<h2>${escapeHtml(line.substring(3))}</h2>`);
+      i++;
+      continue;
+    } else if (line.startsWith('# ')) {
+      output.push(`<h1>${escapeHtml(line.substring(2))}</h1>`);
+      i++;
+      continue;
+    }
+    
+    // Check for unordered list (starts with -, *, or •)
+    if (/^[-*•]\s/.test(line)) {
+      const listItems = [];
+      while (i < lines.length && /^[-*•]\s/.test(lines[i].trim())) {
+        const itemText = lines[i].trim().replace(/^[-*•]\s+/, '');
+        listItems.push(`<li>${formatInlineMarkdown(itemText)}</li>`);
+        i++;
+      }
+      if (listItems.length > 0) {
+        output.push(`<ul>${listItems.join('')}</ul>`);
+      }
+      continue;
+    }
+    
+    // Check for ordered list (starts with number.)
+    if (/^\d+\.\s/.test(line)) {
+      const listItems = [];
+      while (i < lines.length && /^\d+\.\s/.test(lines[i].trim())) {
+        const itemText = lines[i].trim().replace(/^\d+\.\s+/, '');
+        listItems.push(`<li>${formatInlineMarkdown(itemText)}</li>`);
+        i++;
+      }
+      if (listItems.length > 0) {
+        output.push(`<ol>${listItems.join('')}</ol>`);
+      }
+      continue;
+    }
+    
+    // Check for plain text headings (common in Quick Scope format)
+    // Pattern: Word(s) followed by colon on its own line, with empty line before
+    // Examples: "Hypothesis:", "User Story:", "MVP:", "Definition of done:"
+    if (line.match(/^[A-Z][a-zA-Z\s]+:$/) && 
+        (i === 0 || lines[i-1]?.trim() === '') &&
+        (i + 1 < lines.length && lines[i + 1]?.trim() !== '')) {
+      // This looks like a heading - convert to h2
+      const headingText = line.replace(/:$/, ''); // Remove trailing colon
+      output.push(`<h2>${escapeHtml(headingText)}</h2>`);
+      i++;
+      continue;
+    }
+    
+    // Regular paragraph - collect consecutive non-empty lines
+    const paragraphLines = [];
+    while (i < lines.length && lines[i].trim() && 
+           !lines[i].trim().startsWith('#') && 
+           !/^[-*•]\s/.test(lines[i].trim()) &&
+           !/^\d+\.\s/.test(lines[i].trim()) &&
+           !lines[i].trim().match(/^[A-Z][a-zA-Z\s]+:$/)) { // Exclude plain text headings
+      paragraphLines.push(lines[i].trim());
+      i++;
+    }
+    
+    if (paragraphLines.length > 0) {
+      const paragraphContent = paragraphLines
+        .map(l => formatInlineMarkdown(l))
+        .join('<br/>');
+      output.push(`<p>${paragraphContent}</p>`);
+    }
+  }
+  
+  return output.join('\n');
+}
+
+// Helper function: Escape HTML entities (but preserve our tags)
+function escapeHtml(text) {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+// Helper function: Format inline markdown (bold, italic, code)
+function formatInlineMarkdown(text) {
+  if (!text) return '';
+  
+  // Use placeholder approach to preserve content while processing
+  const placeholders = {};
+  let placeholderIndex = 0;
+  
+  // First, replace markdown patterns with placeholders
+  let processed = text;
+  
+  // Bold: **text**
+  processed = processed.replace(/\*\*([^*]+?)\*\*/g, (match, content) => {
+    const key = `__PLACEHOLDER_${placeholderIndex++}__`;
+    placeholders[key] = `<strong>${escapeHtml(content)}</strong>`;
+    return key;
+  });
+  
+  // Bold: __text__
+  processed = processed.replace(/__([^_]+?)__/g, (match, content) => {
+    const key = `__PLACEHOLDER_${placeholderIndex++}__`;
+    placeholders[key] = `<strong>${escapeHtml(content)}</strong>`;
+    return key;
+  });
+  
+  // Code: `code`
+  processed = processed.replace(/`([^`]+?)`/g, (match, content) => {
+    const key = `__PLACEHOLDER_${placeholderIndex++}__`;
+    placeholders[key] = `<code>${escapeHtml(content)}</code>`;
+    return key;
+  });
+  
+  // Italic: *text* (but not if it's part of **)
+  processed = processed.replace(/(?<!\*)\*([^*]+?)\*(?!\*)/g, (match, content) => {
+    const key = `__PLACEHOLDER_${placeholderIndex++}__`;
+    placeholders[key] = `<em>${escapeHtml(content)}</em>`;
+    return key;
+  });
+  
+  // Escape remaining HTML
+  processed = escapeHtml(processed);
+  
+  // Restore placeholders
+  for (const [key, value] of Object.entries(placeholders)) {
+    processed = processed.replace(key, value);
+  }
+  
+  return processed;
+}
+
+// Helper function: Make HTTPS request (using Node.js built-in https module)
+function makeHttpsRequest(options, data) {
+  return new Promise((resolve, reject) => {
+    const req = https.request(options, (res) => {
+      let body = '';
+      
+      res.on('data', (chunk) => {
+        body += chunk;
+      });
+      
+      res.on('end', () => {
+        try {
+          const parsed = JSON.parse(body);
+          if (res.statusCode >= 200 && res.statusCode < 300) {
+            resolve({ statusCode: res.statusCode, data: parsed });
+          } else {
+            reject(new Error(parsed.message || parsed.title || `HTTP ${res.statusCode}: ${body}`));
+          }
+        } catch (e) {
+          if (res.statusCode >= 200 && res.statusCode < 300) {
+            resolve({ statusCode: res.statusCode, data: body });
+          } else {
+            reject(new Error(`HTTP ${res.statusCode}: ${body}`));
+          }
+        }
+      });
+    });
+    
+    req.on('error', (error) => {
+      reject(error);
+    });
+    
+    if (data) {
+      req.write(JSON.stringify(data));
+    }
+    
+    req.end();
+  });
+}
+
+// Confluence configuration from environment variables
+// These should be set in .env locally and in Railway environment variables
+const CONFLUENCE_CONFIG = {
+  domain: process.env.CONFLUENCE_DOMAIN,
+  email: process.env.CONFLUENCE_EMAIL,
+  apiToken: process.env.CONFLUENCE_API_TOKEN,
+  space: process.env.CONFLUENCE_SPACE_KEY
+};
+
+// API endpoint: Export content to Confluence
+app.post('/api/export-to-confluence', async (req, res) => {
+  try {
+    const { pageTitle, parentId, content } = req.body;
+    
+    // Get credentials from environment variables
+    const { domain, email, apiToken, space } = CONFLUENCE_CONFIG;
+    
+    // Validate that all required Confluence credentials are set
+    if (!domain || !email || !apiToken || !space) {
+      console.error('Confluence credentials missing. Required env vars: CONFLUENCE_DOMAIN, CONFLUENCE_EMAIL, CONFLUENCE_API_TOKEN, CONFLUENCE_SPACE_KEY');
+      return res.status(500).json({ 
+        error: 'Confluence integration not configured. Please set CONFLUENCE_DOMAIN, CONFLUENCE_EMAIL, CONFLUENCE_API_TOKEN, and CONFLUENCE_SPACE_KEY environment variables.' 
+      });
+    }
+    
+    // Validate required fields
+    if (!pageTitle || !content) {
+      return res.status(400).json({ 
+        error: 'Missing required fields: pageTitle and content are required' 
+      });
+    }
+    
+    // Convert content to Confluence storage format
+    const storageContent = convertToConfluenceStorage(content);
+    
+    // Prepare the page data for Confluence API
+    const pageData = {
+      type: 'page',
+      title: pageTitle,
+      space: {
+        key: space
+      },
+      body: {
+        storage: {
+          value: storageContent,
+          representation: 'storage'
+        }
+      }
+    };
+    
+    // If parentId is provided, add it as ancestor
+    if (parentId) {
+      pageData.ancestors = [{ id: parentId }];
+    }
+    
+    // Create Basic Auth credentials (email:apiToken encoded in base64)
+    const auth = Buffer.from(`${email}:${apiToken}`).toString('base64');
+    
+    // Prepare HTTPS request options
+    const options = {
+      hostname: domain,
+      path: '/wiki/rest/api/content',
+      method: 'POST',
+      headers: {
+        'Authorization': `Basic ${auth}`,
+        'Content-Type': 'application/json',
+        'Accept': 'application/json'
+      }
+    };
+    
+    // Make the request to Confluence API
+    const result = await makeHttpsRequest(options, pageData);
+    
+    // Extract page ID and construct URL
+    const pageId = result.data.id;
+    // Construct Confluence page URL - use webui link if available, otherwise construct manually
+    let pageUrl;
+    if (result.data._links && result.data._links.webui) {
+      // webui link is typically just the path (e.g., /pages/viewpage.action?pageId=123)
+      // We need to prepend https://domain/wiki
+      const webuiPath = result.data._links.webui;
+      // Ensure webui path starts with /wiki (most Confluence APIs return paths without /wiki)
+      if (webuiPath.startsWith('/wiki')) {
+        pageUrl = `https://${domain}${webuiPath}`;
+      } else {
+        pageUrl = `https://${domain}/wiki${webuiPath.startsWith('/') ? webuiPath : '/' + webuiPath}`;
+      }
+    } else {
+      // Fallback: construct URL manually using space and page ID
+      pageUrl = `https://${domain}/wiki/spaces/${space}/pages/${pageId}/${encodeURIComponent(pageTitle.replace(/\s+/g, '+'))}`;
+    }
+    
+    // Return success response with page ID and URL
+    res.json({
+      success: true,
+      pageId: pageId,
+      url: pageUrl,
+      message: 'Successfully exported to Confluence'
+    });
+    
+  } catch (error) {
+    console.error('Error exporting to Confluence:', error);
+    
+    // Provide more helpful error messages
+    let errorMessage = error.message || 'Failed to export to Confluence';
+    
+    // Check for common errors
+    if (errorMessage.includes('401') || errorMessage.includes('Unauthorized')) {
+      errorMessage = 'Authentication failed. Please check your email and API token.';
+    } else if (errorMessage.includes('404') || errorMessage.includes('Not Found')) {
+      errorMessage = 'Confluence space not found. Please check the space key.';
+    } else if (errorMessage.includes('ENOTFOUND') || errorMessage.includes('getaddrinfo')) {
+      errorMessage = 'Cannot connect to Confluence. Please check your domain.';
+    }
+    
+    res.status(500).json({ 
+      error: errorMessage 
+    });
+  }
+});
+
 // Health check endpoint
 app.get('/health', (req, res) => {
   res.json({ status: 'ok' });
 });
 
+// Static file serving - must be AFTER API routes but BEFORE app.listen()
+app.use(express.static('public'));
+
 // Start server
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`OpenAI API Key configured: ${process.env.OPENAI_API_KEY ? 'Yes' : 'No'}`);
+  console.log(`Confluence configured: ${process.env.CONFLUENCE_DOMAIN ? 'Yes' : 'No'}`);
 });
 

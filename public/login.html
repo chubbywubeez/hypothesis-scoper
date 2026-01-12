@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - Hypothesis Scoper</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        .login-container {
+            max-width: 400px;
+            margin: 100px auto;
+            padding: 40px;
+            background: #1A1E29;
+            border-radius: 8px;
+            border: 1px solid #2A2E39;
+        }
+        .login-header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .login-header img {
+            max-width: 60px;
+            margin-bottom: 15px;
+        }
+        .login-header h1 {
+            margin: 0 0 10px 0;
+            color: #FFFFFF;
+        }
+        .login-header p {
+            color: #A3A6B4;
+            margin: 0;
+        }
+        .auth-tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 25px;
+            border-bottom: 1px solid #2A2E39;
+            padding-bottom: 10px;
+        }
+        .auth-tabs button {
+            flex: 1;
+            padding: 10px;
+            background: transparent;
+            border: none;
+            color: #A3A6B4;
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            transition: all 0.2s;
+        }
+        .auth-tabs button.active {
+            color: #FFFFFF;
+            border-bottom-color: #3498db;
+        }
+        .auth-tabs button:hover {
+            color: #FFFFFF;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #FFFFFF;
+            font-weight: 500;
+        }
+        .form-group input {
+            width: 100%;
+            padding: 12px;
+            background: #0A0E17;
+            border: 1px solid #2A2E39;
+            border-radius: 6px;
+            color: #FFFFFF;
+            font-size: 14px;
+            box-sizing: border-box;
+        }
+        .form-group input:focus {
+            outline: none;
+            border-color: #3498db;
+        }
+        .auth-status {
+            padding: 12px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            display: none;
+        }
+        .auth-status.success {
+            background: #2d5016;
+            color: #90ee90;
+            border: 1px solid #4a7c2a;
+        }
+        .auth-status.error {
+            background: #5a1a1a;
+            color: #ff6b6b;
+            border: 1px solid #8b2a2a;
+        }
+        .auth-submit-btn {
+            width: 100%;
+            padding: 12px;
+            background: #007A7A;
+            color: #FFFFFF;
+            border: none;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .auth-submit-btn:hover {
+            background: #009999;
+        }
+        .auth-submit-btn:disabled {
+            background: #2A2E39;
+            cursor: not-allowed;
+        }
+        #terms-checkbox-group {
+            margin-top: 10px;
+        }
+        #terms-checkbox-group a {
+            color: #00D4AA;
+            text-decoration: none;
+        }
+        #terms-checkbox-group a:hover {
+            text-decoration: underline;
+        }
+        .back-link {
+            text-align: center;
+            margin-top: 20px;
+        }
+        .back-link a {
+            color: #3498db;
+            text-decoration: none;
+        }
+        .back-link a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="login-container">
+            <div class="login-header">
+                <img src="/vantum-logo.png" alt="Vantum" class="logo" />
+                <h1>Hypothesis Scoper</h1>
+                <p>Convert ideas → hypotheses → scopes</p>
+            </div>
+
+            <div class="auth-tabs">
+                <button id="login-tab" class="active">Login</button>
+                <button id="signup-tab">Sign Up</button>
+            </div>
+
+            <div id="auth-status" class="auth-status"></div>
+
+            <form id="auth-form">
+                <div class="form-group">
+                    <label for="auth-email">Email *</label>
+                    <input type="email" id="auth-email" placeholder="your.email@example.com" required />
+                </div>
+                <div class="form-group">
+                    <label for="auth-password">Password *</label>
+                    <input type="password" id="auth-password" placeholder="Enter your password" required />
+                </div>
+                <div id="signup-options-group" class="form-group" style="display: none;">
+                    <label style="display: flex; align-items: start; cursor: pointer; font-weight: normal; margin-bottom: 15px;">
+                        <input type="checkbox" id="newsletter-checkbox" checked style="margin-right: 10px; margin-top: 3px; width: auto; cursor: pointer;" />
+                        <span style="color: #A3A6B4; font-size: 14px;">
+                            Subscribe to our newsletter for updates and tips
+                        </span>
+                    </label>
+                    <label style="display: flex; align-items: start; cursor: pointer; font-weight: normal;">
+                        <input type="checkbox" id="terms-checkbox" checked style="margin-right: 10px; margin-top: 3px; width: auto; cursor: pointer;" />
+                        <span style="color: #A3A6B4; font-size: 14px;">
+                            I agree to the <a href="/terms.html" target="_blank" style="color: #00D4AA; text-decoration: none;">Terms and Conditions</a> 
+                            and <a href="/privacy.html" target="_blank" style="color: #00D4AA; text-decoration: none;">Privacy Policy</a> *
+                        </span>
+                    </label>
+                </div>
+                <button type="submit" id="auth-submit-btn" class="auth-submit-btn">Login</button>
+            </form>
+
+            <div class="back-link">
+                <a href="/">← Back to Home</a>
+            </div>
+        </div>
+    </div>
+
+    <script src="login.js"></script>
+</body>
+</html>

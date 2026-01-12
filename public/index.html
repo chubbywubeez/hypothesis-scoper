@@ -12,9 +12,21 @@
 <body>
     <div class="container">
         <header>
-            <img src="/vantum-logo.png" alt="Vantum" class="logo" />
-            <h1>Hypothesis Scoper</h1>
-            <p class="subtitle">Convert ideas → hypotheses → scopes</p>
+            <div class="header-top-bar">
+                <div class="header-left">
+                    <span id="user-email" style="display: none; color: #A3A6B4; font-size: 14px;"></span>
+                </div>
+                <div class="header-right">
+                    <button id="my-scopes-btn" class="btn btn-secondary btn-small" style="display: none;">My Scopes</button>
+                    <button id="login-btn" class="btn btn-secondary btn-small">Login</button>
+                    <button id="logout-btn" class="btn btn-secondary btn-small" style="display: none;">Logout</button>
+                </div>
+            </div>
+            <div class="header-content">
+                <img src="/vantum-logo.png" alt="Vantum" class="logo" />
+                <h1>Hypothesis Scoper</h1>
+                <p class="subtitle">Convert ideas → hypotheses → scopes</p>
+            </div>
         </header>
 
         <!-- Step 1: Idea Input -->
@@ -188,17 +200,31 @@
                     <input type="text" id="confluence-page-title" placeholder="Generating title..." />
                     <small>The title for the new Confluence page (will be created in the NM space). Title is generated automatically.</small>
                 </div>
-                <div class="confluence-form-group">
-                    <label for="confluence-parent-id">Parent Page ID (Optional)</label>
-                    <input type="text" id="confluence-parent-id" placeholder="123456789" />
-                    <small>If you want this page under a parent page, enter the parent page ID</small>
-                </div>
             </div>
             <div class="confluence-modal-footer">
                 <button id="confluence-cancel-btn" class="btn btn-secondary">Cancel</button>
                 <button id="confluence-export-btn" class="btn btn-primary">Export to Confluence</button>
             </div>
             <div id="confluence-status" class="confluence-status" style="display: none;"></div>
+        </div>
+    </div>
+
+    <!-- My Scopes Modal -->
+    <div id="my-scopes-modal" class="confluence-modal" style="display: none;">
+        <div class="confluence-modal-content" style="max-width: 900px; max-height: 85vh; display: flex; flex-direction: column;">
+            <div class="confluence-modal-header">
+                <h3>My Saved Scopes</h3>
+                <button id="close-scopes-modal" class="confluence-modal-close-btn">&times;</button>
+            </div>
+            <div class="confluence-modal-body" style="flex: 1; overflow-y: auto; padding-bottom: 0;">
+                <div class="scopes-search-container">
+                    <input type="text" id="scopes-search" class="scopes-search-input" placeholder="Search scopes by title or content..." />
+                </div>
+                <div id="scopes-list"></div>
+            </div>
+            <div class="confluence-modal-footer">
+                <button id="close-scopes-modal-btn" class="btn btn-secondary">Close</button>
+            </div>
         </div>
     </div>
 

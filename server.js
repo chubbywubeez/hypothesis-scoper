@@ -5,6 +5,7 @@ const express = require('express');
 const cors = require('cors');
 const OpenAI = require('openai');
 const https = require('https');
+const { createClient } = require('@supabase/supabase-js');
 require('dotenv').config();
 
 const app = express();
@@ -46,6 +47,26 @@ if (!process.env.OPENAI_API_KEY) {
 if (!process.env.CONFLUENCE_DOMAIN || !process.env.CONFLUENCE_EMAIL || !process.env.CONFLUENCE_API_TOKEN || !process.env.CONFLUENCE_SPACE_KEY) {
   console.warn('WARNING: Confluence credentials not set. Confluence export feature will not work.');
   console.warn('Required: CONFLUENCE_DOMAIN, CONFLUENCE_EMAIL, CONFLUENCE_API_TOKEN, CONFLUENCE_SPACE_KEY');
+}
+
+// Initialize Supabase client
+// Note: SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY should be set in environment variables
+let supabase = null;
+if (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
+  supabase = createClient(
+    process.env.SUPABASE_URL,
+    process.env.SUPABASE_SERVICE_ROLE_KEY,
+    {
+      auth: {
+        autoRefreshToken: false,
+        persistSession: false
+      }
+    }
+  );
+  console.log('Supabase client initialized');
+} else {
+  console.warn('WARNING: Supabase credentials not set. Authentication and save features will not work.');
+  console.warn('Required: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY');
 }
 
 // Initialize OpenAI client
@@ -1259,6 +1280,163 @@ function formatInlineMarkdown(text) {
   return processed;
 }
 
+// Helper function: Subscribe to Beehiiv newsletter
+async function subscribeToBeehiiv(email) {
+  // Accept either correctly spelled vars or the previous single‑i versions for backward compatibility
+  const BEEHIIV_API_KEY = process.env.BEEHIIV_API_KEY || process.env.BEEHIV_API_KEY;
+  const BEEHIIV_PUBLICATION_ID = process.env.BEEHIIV_PUBLICATION_ID || process.env.BEEHIV_PUBLICATION_ID;
+  
+  console.log('=== Beehiiv Subscription Debug ===');
+  console.log('Email:', email);
+  console.log('Has API Key:', !!BEEHIIV_API_KEY);
+  console.log('Has Publication ID:', !!BEEHIIV_PUBLICATION_ID);
+  console.log('Publication ID:', BEEHIIV_PUBLICATION_ID ? BEEHIIV_PUBLICATION_ID.substring(0, 20) + '...' : 'NOT SET');
+  
+  if (!BEEHIIV_API_KEY || !BEEHIIV_PUBLICATION_ID) {
+    console.warn('Beehiiv API credentials not configured. Skipping newsletter subscription.');
+    console.warn('Required env vars: BEEHIIV_API_KEY (or BEEHIV_API_KEY) and BEEHIIV_PUBLICATION_ID (or BEEHIV_PUBLICATION_ID)');
+    return;
+  }
+  
+  try {
+    // Remove 'pub_' prefix if present (API v2 uses it, but the endpoint might need it without)
+    const publicationId = BEEHIIV_PUBLICATION_ID.startsWith('pub_') 
+      ? BEEHIIV_PUBLICATION_ID 
+      : `pub_${BEEHIIV_PUBLICATION_ID}`;
+    
+    const beehiivUrl = `https://api.beehiiv.com/v2/publications/${publicationId}/subscriptions`;
+    
+    console.log('Calling Beehiiv API:', beehiivUrl);
+    
+    // First, get subscriber tags (not content tags) for 'beastives'
+    // Beehiiv has separate endpoints for subscriber tags vs content tags
+    let tagId = null;
+    try {
+      // Try the subscriber tags endpoint
+      const tagsUrl = `https://api.beehiiv.com/v2/publications/${publicationId}/subscriber_tags`;
+      console.log('Fetching subscriber tags from:', tagsUrl);
+      
+      const tagsResponse = await fetch(tagsUrl, {
+        headers: {
+          'Authorization': `Bearer ${BEEHIIV_API_KEY}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      console.log('Tags API Response Status:', tagsResponse.status);
+      
+      if (tagsResponse.ok) {
+        const tagsData = await tagsResponse.json();
+        console.log('Tags API Response Data:', JSON.stringify(tagsData, null, 2));
+        
+        // Check different possible response structures
+        const tagsList = tagsData.data || tagsData.tags || tagsData;
+        const beastivesTag = Array.isArray(tagsList) 
+          ? tagsList.find(tag => {
+              const tagName = tag.name || tag.tag_name || tag.label;
+              return tagName && (tagName === 'beastives' || tagName.toLowerCase() === 'beastives');
+            })
+          : null;
+          
+        if (beastivesTag) {
+          tagId = beastivesTag.id || beastivesTag.tag_id || beastivesTag._id;
+          console.log('✅ Found beastives tag ID:', tagId, 'Tag object:', JSON.stringify(beastivesTag, null, 2));
+        } else {
+          console.warn('⚠️ beastives tag not found. Available tags:', 
+            Array.isArray(tagsList) ? tagsList.map(t => t.name || t.tag_name || t.label || t) : 'No tags array found');
+        }
+      } else {
+        const errorText = await tagsResponse.text();
+        console.warn('Tags API error response:', tagsResponse.status, errorText);
+      }
+    } catch (tagError) {
+      console.warn('Could not fetch tags, will try subscribing with tag name:', tagError.message);
+    }
+    
+    const requestBody = {
+      email: email,
+      reactivate_existing: false,
+      send_welcome_email: true
+    };
+    
+    // Add tags - try tag ID first, then tag name
+    if (tagId) {
+      requestBody.tags = [tagId];
+      console.log('Using tag ID in request:', tagId);
+    } else {
+      // Try using tag name directly - Beehiiv API might accept this
+      requestBody.tags = ['beastives'];
+      console.warn('⚠️ Using tag name "beastives" directly (tag ID lookup failed)');
+    }
+    
+    console.log('Request body:', JSON.stringify(requestBody, null, 2));
+    
+    const response = await fetch(beehiivUrl, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${BEEHIIV_API_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(requestBody)
+    });
+    
+    const responseText = await response.text();
+    console.log('Beehiiv API Response Status:', response.status);
+    console.log('Beehiiv API Response:', responseText);
+    
+    if (!response.ok) {
+      let errorData;
+      try {
+        errorData = JSON.parse(responseText);
+      } catch (e) {
+        errorData = { message: responseText };
+      }
+      throw new Error(`Beehiiv API error: ${response.status} - ${errorData.message || response.statusText || responseText}`);
+    }
+    
+    const responseData = JSON.parse(responseText);
+    const subscriberId = responseData.id || responseData.data?.id;
+    
+    console.log(`✅ Successfully subscribed ${email} to Beehiiv newsletter`);
+    console.log('Response data:', JSON.stringify(responseData, null, 2));
+    
+    // If tags weren't applied during subscription, try to apply them after
+    if (subscriberId && (!tagId || !responseData.tags || !responseData.tags.includes(tagId))) {
+      console.log('Attempting to apply tags after subscription...');
+      try {
+        // Try to update subscriber with tags
+        const updateUrl = `https://api.beehiiv.com/v2/publications/${publicationId}/subscriptions/${subscriberId}`;
+        const updateBody = tagId ? { tags: [tagId] } : { tags: ['beastives'] };
+        
+        const updateResponse = await fetch(updateUrl, {
+          method: 'PATCH',
+          headers: {
+            'Authorization': `Bearer ${BEEHIIV_API_KEY}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(updateBody)
+        });
+        
+        if (updateResponse.ok) {
+          const updateData = await updateResponse.json();
+          console.log('✅ Tags applied successfully via update:', JSON.stringify(updateData, null, 2));
+        } else {
+          const updateError = await updateResponse.text();
+          console.warn('⚠️ Could not apply tags via update:', updateResponse.status, updateError);
+        }
+      } catch (updateError) {
+        console.warn('⚠️ Error applying tags after subscription:', updateError.message);
+      }
+    }
+    
+    return responseData;
+  } catch (error) {
+    console.error('❌ Beehiiv subscription error:', error.message);
+    console.error('Full error:', error);
+    throw error;
+  }
+}
+
 // Helper function: Make HTTPS request (using Node.js built-in https module)
 function makeHttpsRequest(options, data) {
   return new Promise((resolve, reject) => {
@@ -1388,8 +1566,42 @@ Title:`;
 });
 
 // API endpoint: Export content to Confluence
+// Only available to internal users
 app.post('/api/export-to-confluence', async (req, res) => {
   try {
+    // Check authentication and role
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+    
+    const token = authHeader.substring(7);
+    
+    if (!supabase) {
+      return res.status(500).json({ error: 'Supabase not configured' });
+    }
+    
+    // Verify token and get user
+    const { data: { user }, error: userError } = await supabase.auth.getUser(token);
+    
+    if (userError || !user) {
+      return res.status(401).json({ error: 'Invalid or expired token' });
+    }
+    
+    // Get user profile with role
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', user.id)
+      .single();
+    
+    const userRole = profile?.role || 'customer';
+    
+    // Only internal users can export to Confluence
+    if (userRole !== 'internal') {
+      return res.status(403).json({ error: 'Confluence export is only available to internal users' });
+    }
+    
     const { pageTitle, parentId, content } = req.body;
     
     // Get credentials from environment variables
@@ -1496,6 +1708,330 @@ app.post('/api/export-to-confluence', async (req, res) => {
     res.status(500).json({ 
       error: errorMessage 
     });
+  }
+});
+
+// ============================================
+// AUTHENTICATION ENDPOINTS
+// ============================================
+
+// Sign up endpoint
+app.post('/api/auth/signup', async (req, res) => {
+  try {
+    const { email, password, role = 'customer', terms_accepted, newsletter_subscribed } = req.body;
+    
+    if (!email || !password) {
+      return res.status(400).json({ error: 'Email and password are required' });
+    }
+    
+    // Validate terms acceptance
+    if (!terms_accepted) {
+      return res.status(400).json({ error: 'You must accept the Terms and Conditions and Privacy Policy to create an account' });
+    }
+    
+    if (!supabase) {
+      return res.status(500).json({ error: 'Supabase not configured' });
+    }
+    
+    // Create user in Supabase Auth
+    const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true // Auto-confirm email for simplicity
+    });
+    
+    if (authError) {
+      return res.status(400).json({ error: authError.message });
+    }
+    
+    // Create profile with role and terms acceptance
+    const { error: profileError } = await supabase
+      .from('profiles')
+      .insert({
+        id: authData.user.id,
+        email: email,
+        role: role === 'internal' ? 'internal' : 'customer', // Only allow setting internal role if explicitly requested
+        terms_accepted: true,
+        terms_accepted_at: new Date().toISOString()
+      });
+    
+    if (profileError) {
+      console.error('Profile creation error:', profileError);
+      // User created but profile failed - not ideal but continue
+    }
+    
+    // Subscribe to Beehiiv newsletter if requested
+    if (newsletter_subscribed) {
+      console.log(`Newsletter subscription requested for: ${email}`);
+      try {
+        await subscribeToBeehiiv(email);
+        console.log(`✅ Newsletter subscription completed for: ${email}`);
+      } catch (beehiivError) {
+        console.error('❌ Beehiiv subscription failed (signup will continue):', beehiivError.message);
+        // Don't fail signup if newsletter subscription fails
+      }
+    } else {
+      console.log(`Newsletter subscription not requested for: ${email}`);
+    }
+    
+    // Generate session token
+    const { data: sessionData, error: sessionError } = await supabase.auth.admin.generateLink({
+      type: 'magiclink',
+      email: email
+    });
+    
+    // Return user info and token
+    res.json({
+      user: {
+        id: authData.user.id,
+        email: authData.user.email,
+        role: role === 'internal' ? 'internal' : 'customer'
+      },
+      // For simplicity, we'll return a token they can use
+      // In production, you might want to use Supabase's session management
+      message: 'User created successfully. Please use /api/auth/login to get a token.'
+    });
+    
+  } catch (error) {
+    console.error('Signup error:', error);
+    res.status(500).json({ error: 'Failed to create user' });
+  }
+});
+
+// Login endpoint
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    
+    if (!email || !password) {
+      return res.status(400).json({ error: 'Email and password are required' });
+    }
+    
+    if (!supabase) {
+      return res.status(500).json({ error: 'Supabase not configured' });
+    }
+    
+    // Sign in user
+    const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+      email,
+      password
+    });
+    
+    if (authError) {
+      return res.status(401).json({ error: 'Invalid email or password' });
+    }
+    
+    // Get user profile with role
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', authData.user.id)
+      .single();
+    
+    // Return user info and access token
+    res.json({
+      user: {
+        id: authData.user.id,
+        email: authData.user.email,
+        role: profile?.role || 'customer'
+      },
+      access_token: authData.session.access_token,
+      expires_at: authData.session.expires_at
+    });
+    
+  } catch (error) {
+    console.error('Login error:', error);
+    res.status(500).json({ error: 'Failed to login' });
+  }
+});
+
+// Get current user endpoint
+app.get('/api/auth/me', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'No authorization token provided' });
+    }
+    
+    const token = authHeader.substring(7);
+    
+    if (!supabase) {
+      return res.status(500).json({ error: 'Supabase not configured' });
+    }
+    
+    // Verify token and get user
+    const { data: { user }, error: userError } = await supabase.auth.getUser(token);
+    
+    if (userError || !user) {
+      return res.status(401).json({ error: 'Invalid or expired token' });
+    }
+    
+    // Get profile with role
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', user.id)
+      .single();
+    
+    res.json({
+      user: {
+        id: user.id,
+        email: user.email,
+        role: profile?.role || 'customer'
+      }
+    });
+    
+  } catch (error) {
+    console.error('Get user error:', error);
+    res.status(500).json({ error: 'Failed to get user info' });
+  }
+});
+
+// ============================================
+// SAVE/RETRIEVE SCOPE ENDPOINTS
+// ============================================
+
+// Save scope endpoint (requires authentication)
+app.post('/api/save-scope', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+    
+    const token = authHeader.substring(7);
+    const { title, content, content_type } = req.body;
+    
+    if (!title || !content) {
+      return res.status(400).json({ error: 'Title and content are required' });
+    }
+    
+    if (!supabase) {
+      return res.status(500).json({ error: 'Supabase not configured' });
+    }
+    
+    // Verify token and get user
+    const { data: { user }, error: userError } = await supabase.auth.getUser(token);
+    
+    if (userError || !user) {
+      return res.status(401).json({ error: 'Invalid or expired token' });
+    }
+    
+    // Save to database
+    const { data, error } = await supabase
+      .from('saved_scopes')
+      .insert({
+        user_id: user.id,
+        title: title,
+        content: content,
+        content_type: content_type || 'hypothesis'
+      })
+      .select()
+      .single();
+    
+    if (error) {
+      console.error('Save scope error:', error);
+      return res.status(500).json({ error: 'Failed to save scope' });
+    }
+    
+    res.json({
+      success: true,
+      scope: data,
+      message: 'Scope saved successfully'
+    });
+    
+  } catch (error) {
+    console.error('Save scope error:', error);
+    res.status(500).json({ error: 'Failed to save scope' });
+  }
+});
+
+// Get user's saved scopes (requires authentication)
+app.get('/api/my-scopes', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+    
+    const token = authHeader.substring(7);
+    
+    if (!supabase) {
+      return res.status(500).json({ error: 'Supabase not configured' });
+    }
+    
+    // Verify token and get user
+    const { data: { user }, error: userError } = await supabase.auth.getUser(token);
+    
+    if (userError || !user) {
+      return res.status(401).json({ error: 'Invalid or expired token' });
+    }
+    
+    // Get user's saved scopes
+    const { data, error } = await supabase
+      .from('saved_scopes')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false });
+    
+    if (error) {
+      console.error('Get scopes error:', error);
+      return res.status(500).json({ error: 'Failed to retrieve scopes' });
+    }
+    
+    res.json({
+      success: true,
+      scopes: data || []
+    });
+    
+  } catch (error) {
+    console.error('Get scopes error:', error);
+    res.status(500).json({ error: 'Failed to retrieve scopes' });
+  }
+});
+
+// Delete saved scope (requires authentication)
+app.delete('/api/scopes/:id', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+    
+    const token = authHeader.substring(7);
+    const { id } = req.params;
+    
+    if (!supabase) {
+      return res.status(500).json({ error: 'Supabase not configured' });
+    }
+    
+    // Verify token and get user
+    const { data: { user }, error: userError } = await supabase.auth.getUser(token);
+    
+    if (userError || !user) {
+      return res.status(401).json({ error: 'Invalid or expired token' });
+    }
+    
+    // Delete scope (only if it belongs to the user)
+    const { error } = await supabase
+      .from('saved_scopes')
+      .delete()
+      .eq('id', id)
+      .eq('user_id', user.id);
+    
+    if (error) {
+      console.error('Delete scope error:', error);
+      return res.status(500).json({ error: 'Failed to delete scope' });
+    }
+    
+    res.json({
+      success: true,
+      message: 'Scope deleted successfully'
+    });
+    
+  } catch (error) {
+    console.error('Delete scope error:', error);
+    res.status(500).json({ error: 'Failed to delete scope' });
   }
 });
 

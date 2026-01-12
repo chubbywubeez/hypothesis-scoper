@@ -1,6 +1,39 @@
 // Frontend JavaScript for Hypothesis Scoper
 // Handles user interactions, API calls, and clipboard operations
 
+// Authentication state
+let currentUser = null;
+let authToken = null;
+let userRole = null;
+
+// Check authentication on page load - redirect to login if not authenticated
+async function checkAuthOnLoad() {
+    const savedToken = localStorage.getItem('authToken');
+    
+    if (!savedToken) {
+        // No token, redirect to login
+        window.location.href = '/login.html';
+        return;
+    }
+    
+    // Set token and verify it's still valid
+    authToken = savedToken;
+    const isValid = await checkAuth(savedToken);
+    if (!isValid) {
+        // Token invalid, redirect to login
+        authToken = null;
+        localStorage.removeItem('authToken');
+        window.location.href = '/login.html';
+        return;
+    }
+    
+    // Token is valid, initialize UI
+    updateUIForAuth();
+}
+
+// Check authentication when page loads
+checkAuthOnLoad();
+
 // Store original idea for scope generation
 let originalIdea = '';
 
@@ -246,11 +279,23 @@ const confluenceCancelBtn = document.getElementById('confluence-cancel-btn');
 const confluenceExportBtn = document.getElementById('confluence-export-btn');
 const confluenceStatus = document.getElementById('confluence-status');
 const confluencePageTitle = document.getElementById('confluence-page-title');
-const confluenceParentId = document.getElementById('confluence-parent-id');
+
+// Auth elements
+const loginBtn = document.getElementById('login-btn');
+const logoutBtn = document.getElementById('logout-btn');
+const userEmail = document.getElementById('user-email');
+const myScopesModal = document.getElementById('my-scopes-modal');
+const closeScopesModal = document.getElementById('close-scopes-modal');
+const closeScopesModalBtn = document.getElementById('close-scopes-modal-btn');
+const scopesList = document.getElementById('scopes-list');
+const myScopesBtn = document.getElementById('my-scopes-btn');
+const scopesSearch = document.getElementById('scopes-search');
 
 // Store current content to export (set when export button is clicked)
 let currentContentToExport = '';
 let currentExportType = ''; // 'hypothesis', 'scope', or 'quickScope'
+let isLoginMode = true; // Toggle between login and signup
+let allScopesData = []; // Store all scopes for search filtering
 
 // Advanced Mode elements
 const advancedModeBtn = document.getElementById('advanced-mode-btn');
@@ -351,6 +396,9 @@ generateHypothesisBtn.addEventListener('click', async () => {
     hideError();
     hypothesisSection.style.display = 'none';
     
+    // Disable save button during generation
+    setSaveButtonsState(true, 'hypothesis');
+    
     // Start progress tracking
     startProgress('hypothesis', ESTIMATED_TIMES.hypothesis);
     
@@ -423,6 +471,9 @@ generateHypothesisBtn.addEventListener('click', async () => {
                             stopProgress();
                             generateHypothesisBtn.disabled = false;
                             
+                            // Enable save button after generation completes
+                            setSaveButtonsState(false, 'hypothesis');
+                            
                             setTimeout(() => {
                                 hypothesisLoading.style.display = 'none';
                             }, 500);
@@ -439,6 +490,7 @@ generateHypothesisBtn.addEventListener('click', async () => {
         stopProgress();
         showError(`Error: ${error.message}`);
         generateHypothesisBtn.disabled = false;
+        setSaveButtonsState(false, 'hypothesis'); // Re-enable on error
         hypothesisLoading.style.display = 'none';
     }
 });
@@ -461,6 +513,9 @@ generateScopeBtn.addEventListener('click', async () => {
     scopeLoading.style.display = 'block';
     hideError();
     scopeSection.style.display = 'none';
+    
+    // Disable save button during generation
+    setSaveButtonsState(true, 'scope');
     
     // Start progress tracking
     startProgress('scope', ESTIMATED_TIMES.scope);
@@ -537,6 +592,10 @@ generateScopeBtn.addEventListener('click', async () => {
                             // Stop progress and complete
                             stopProgress();
                             generateScopeBtn.disabled = false;
+                            
+                            // Enable save button after generation completes
+                            setSaveButtonsState(false, 'scope');
+                            
                             setTimeout(() => {
                                 scopeLoading.style.display = 'none';
                             }, 500);
@@ -553,6 +612,7 @@ generateScopeBtn.addEventListener('click', async () => {
         stopProgress();
         showError(`Error: ${error.message}`);
         generateScopeBtn.disabled = false;
+        setSaveButtonsState(false, 'scope'); // Re-enable on error
         scopeLoading.style.display = 'none';
     }
 });
@@ -710,9 +770,9 @@ copyQuickScopeBtn.addEventListener('click', async () => {
     }
 });
 
-// Confluence Export handlers
-// Open Confluence modal and store content to export
-exportHypothesisConfluenceBtn.addEventListener('click', () => {
+// Confluence Export / Save handlers
+// Route based on user role: internal users export to Confluence, customers save to their scopes
+exportHypothesisConfluenceBtn.addEventListener('click', async () => {
     // Use edited content if available, otherwise use raw or extract from display
     // If we're in edit mode, use the textarea content
     const text = hypothesisOutputEdit.style.display !== 'none' 
@@ -723,38 +783,56 @@ exportHypothesisConfluenceBtn.addEventListener('click', () => {
         showError('No hypothesis to export.');
         return;
     }
-    currentContentToExport = text; // Use raw markdown for export (or edited version)
-    currentExportType = 'hypothesis';
-    openConfluenceModal();
+    
+    // Check user role - internal users export to Confluence, customers save
+    if (userRole === 'internal') {
+        currentContentToExport = text; // Use raw markdown for export (or edited version)
+        currentExportType = 'hypothesis';
+        openConfluenceModal();
+    } else {
+        // Customer: save to their scopes
+        await saveScope(null, text, 'hypothesis');
+    }
 });
 
-exportScopeConfluenceBtn.addEventListener('click', () => {
+exportScopeConfluenceBtn.addEventListener('click', async () => {
     const text = rawScopeContent || scopeOutput.textContent.trim();
     if (!text) {
         showError('No scope to export.');
         return;
     }
-    currentContentToExport = text; // Use raw markdown for export
-    currentExportType = 'scope';
-    openConfluenceModal();
+    
+    // Check user role - internal users export to Confluence, customers save
+    if (userRole === 'internal') {
+        currentContentToExport = text; // Use raw markdown for export
+        currentExportType = 'scope';
+        openConfluenceModal();
+    } else {
+        // Customer: save to their scopes
+        await saveScope(null, text, 'scope');
+    }
 });
 
-exportQuickScopeConfluenceBtn.addEventListener('click', () => {
+exportQuickScopeConfluenceBtn.addEventListener('click', async () => {
     const text = rawQuickScopeContent || quickScopeOutput.textContent.trim();
     if (!text) {
         showError('No quick scope to export.');
         return;
     }
-    currentContentToExport = text; // Use raw content for export (will be formatted by server)
-    currentExportType = 'quickScope';
-    openConfluenceModal();
+    
+    // Check user role - internal users export to Confluence, customers save
+    if (userRole === 'internal') {
+        currentContentToExport = text; // Use raw content for export (will be formatted by server)
+        currentExportType = 'quickScope';
+        openConfluenceModal();
+    } else {
+        // Customer: save to their scopes
+        await saveScope(null, text, 'quick_scope');
+    }
 });
 
 // Open Confluence modal function
 async function openConfluenceModal() {
-    // Clear parent ID
-    confluenceParentId.value = '';
-    
     // Hide any previous status messages
     confluenceStatus.style.display = 'none';
     
@@ -869,16 +947,22 @@ confluenceExportBtn.addEventListener('click', async () => {
     showConfluenceStatus('Exporting to Confluence...', 'success');
     
     try {
+        // Check if user is authenticated
+        if (!authToken) {
+            showConfluenceStatus('Error: Please log in to export to Confluence', 'error');
+            return;
+        }
+        
         // Use hardcoded credentials - no need to send from client
         const response = await fetch('/api/export-to-confluence', {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${authToken}`
             },
             body: JSON.stringify({
                 // Credentials are hardcoded on server, only send content and metadata
                 pageTitle,
-                parentId: confluenceParentId.value.trim() || null,
                 content: currentContentToExport
             })
         });
@@ -934,6 +1018,9 @@ quickScopeBtn.addEventListener('click', async () => {
     quickScopeSection.style.display = 'none';
     hypothesisSection.style.display = 'none';
     scopeSection.style.display = 'none';
+    
+    // Disable save button during generation
+    setSaveButtonsState(true, 'quickScope');
     
     // Start progress tracking
     startProgress('quickScope', ESTIMATED_TIMES.quickScope);
@@ -1012,6 +1099,9 @@ quickScopeBtn.addEventListener('click', async () => {
                             stopProgress();
                             quickScopeBtn.disabled = false;
                             
+                            // Enable save button after generation completes
+                            setSaveButtonsState(false, 'quickScope');
+                            
                             setTimeout(() => {
                                 quickScopeLoading.style.display = 'none';
                             }, 500);
@@ -1028,6 +1118,7 @@ quickScopeBtn.addEventListener('click', async () => {
         stopProgress();
         showError(`Error: ${error.message}`);
         quickScopeBtn.disabled = false;
+        setSaveButtonsState(false, 'quickScope'); // Re-enable on error
         quickScopeLoading.style.display = 'none';
     }
 });
@@ -1303,6 +1394,9 @@ generateFromAdvancedBtn.addEventListener('click', async () => {
     hideError();
     hypothesisSection.style.display = 'none';
     
+    // Disable save button during generation
+    setSaveButtonsState(true, 'hypothesis');
+    
     // Start progress tracking
     startProgress('hypothesis', ESTIMATED_TIMES.hypothesis);
     
@@ -1379,6 +1473,9 @@ generateFromAdvancedBtn.addEventListener('click', async () => {
                             stopProgress();
                             generateFromAdvancedBtn.disabled = false;
                             
+                            // Enable save button after generation completes
+                            setSaveButtonsState(false, 'hypothesis');
+                            
                             setTimeout(() => {
                                 hypothesisLoading.style.display = 'none';
                             }, 500);
@@ -1395,7 +1492,436 @@ generateFromAdvancedBtn.addEventListener('click', async () => {
         stopProgress();
         showError(`Error: ${error.message}`);
         generateFromAdvancedBtn.disabled = false;
+        setSaveButtonsState(false, 'hypothesis'); // Re-enable on error
         hypothesisLoading.style.display = 'none';
     }
 });
 
+// ============================================
+// AUTHENTICATION FUNCTIONS
+// ============================================
+
+// Check authentication status
+async function checkAuth(token) {
+    try {
+        const response = await fetch('/api/auth/me', {
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+        
+        if (response.ok) {
+            const data = await response.json();
+            currentUser = data.user;
+            userRole = data.user.role;
+            updateUIForAuth();
+            return true;
+        } else {
+            // Token invalid, clear it
+            localStorage.removeItem('authToken');
+            authToken = null;
+            currentUser = null;
+            userRole = null;
+            updateUIForAuth();
+            return false;
+        }
+    } catch (error) {
+        console.error('Auth check error:', error);
+        return false;
+    }
+}
+
+// Helper functions to manage save/export button states
+function setSaveButtonsState(disabled, type = null) {
+    // type can be 'hypothesis', 'scope', 'quickScope', or null (all)
+    const buttons = [];
+    
+    if (!type || type === 'hypothesis') {
+        if (exportHypothesisConfluenceBtn) buttons.push(exportHypothesisConfluenceBtn);
+    }
+    if (!type || type === 'scope') {
+        if (exportScopeConfluenceBtn) buttons.push(exportScopeConfluenceBtn);
+    }
+    if (!type || type === 'quickScope') {
+        if (exportQuickScopeConfluenceBtn) buttons.push(exportQuickScopeConfluenceBtn);
+    }
+    
+    buttons.forEach(btn => {
+        if (btn) {
+            btn.disabled = disabled;
+            if (disabled) {
+                btn.classList.add('save-btn-disabled');
+                btn.classList.remove('save-btn-enabled');
+            } else {
+                btn.classList.remove('save-btn-disabled');
+                // Only add teal styling for customer users (not internal)
+                if (userRole === 'customer') {
+                    btn.classList.add('save-btn-enabled');
+                }
+            }
+        }
+    });
+}
+
+// Update UI based on authentication state
+function updateUIForAuth() {
+    if (currentUser && authToken) {
+        // User is logged in
+        if (loginBtn) loginBtn.style.display = 'none';
+        if (logoutBtn) logoutBtn.style.display = 'inline-block';
+        if (userEmail) {
+            userEmail.textContent = currentUser.email;
+            userEmail.style.display = 'inline-block';
+        }
+        if (myScopesBtn) myScopesBtn.style.display = 'inline-block';
+        
+        // Show/hide buttons based on role
+        if (userRole === 'internal') {
+            // Internal users see Export to Confluence buttons
+            if (exportHypothesisConfluenceBtn) {
+                exportHypothesisConfluenceBtn.style.display = 'inline-block';
+                exportHypothesisConfluenceBtn.textContent = 'Export to Confluence';
+                // Check if there's content to enable/disable
+                const hasHypothesis = rawHypothesisContent || (hypothesisOutput && hypothesisOutput.textContent.trim());
+                setSaveButtonsState(!hasHypothesis, 'hypothesis');
+            }
+            if (exportScopeConfluenceBtn) {
+                exportScopeConfluenceBtn.style.display = 'inline-block';
+                exportScopeConfluenceBtn.textContent = 'Export to Confluence';
+                const hasScope = rawScopeContent || (scopeOutput && scopeOutput.textContent.trim());
+                setSaveButtonsState(!hasScope, 'scope');
+            }
+            if (exportQuickScopeConfluenceBtn) {
+                exportQuickScopeConfluenceBtn.style.display = 'inline-block';
+                exportQuickScopeConfluenceBtn.textContent = 'Export to Confluence';
+                const hasQuickScope = rawQuickScopeContent || (quickScopeOutput && quickScopeOutput.textContent.trim());
+                setSaveButtonsState(!hasQuickScope, 'quickScope');
+            }
+        } else {
+            // Customers see Save buttons instead (teal when enabled)
+            if (exportHypothesisConfluenceBtn) {
+                exportHypothesisConfluenceBtn.style.display = 'inline-block';
+                exportHypothesisConfluenceBtn.textContent = 'Save Hypothesis';
+                const hasHypothesis = rawHypothesisContent || (hypothesisOutput && hypothesisOutput.textContent.trim());
+                setSaveButtonsState(!hasHypothesis, 'hypothesis');
+            }
+            if (exportScopeConfluenceBtn) {
+                exportScopeConfluenceBtn.style.display = 'inline-block';
+                exportScopeConfluenceBtn.textContent = 'Save Scope';
+                const hasScope = rawScopeContent || (scopeOutput && scopeOutput.textContent.trim());
+                setSaveButtonsState(!hasScope, 'scope');
+            }
+            if (exportQuickScopeConfluenceBtn) {
+                exportQuickScopeConfluenceBtn.style.display = 'inline-block';
+                exportQuickScopeConfluenceBtn.textContent = 'Save Quick Scope';
+                const hasQuickScope = rawQuickScopeContent || (quickScopeOutput && quickScopeOutput.textContent.trim());
+                setSaveButtonsState(!hasQuickScope, 'quickScope');
+            }
+        }
+    } else {
+        // User is not logged in
+        if (loginBtn) loginBtn.style.display = 'inline-block';
+        if (logoutBtn) logoutBtn.style.display = 'none';
+        if (userEmail) userEmail.style.display = 'none';
+        if (myScopesBtn) myScopesBtn.style.display = 'none';
+        
+        // Hide all export/save buttons until logged in
+        if (exportHypothesisConfluenceBtn) exportHypothesisConfluenceBtn.style.display = 'none';
+        if (exportScopeConfluenceBtn) exportScopeConfluenceBtn.style.display = 'none';
+        if (exportQuickScopeConfluenceBtn) exportQuickScopeConfluenceBtn.style.display = 'none';
+    }
+}
+
+// Logout function
+function handleLogout() {
+    authToken = null;
+    currentUser = null;
+    userRole = null;
+    localStorage.removeItem('authToken');
+    updateUIForAuth();
+    showSuccess('Logged out successfully');
+    // Redirect to login page
+    window.location.href = '/login.html';
+}
+
+// Auth event handlers
+if (loginBtn) {
+    loginBtn.addEventListener('click', () => {
+        window.location.href = '/login.html';
+    });
+}
+
+if (logoutBtn) {
+    logoutBtn.addEventListener('click', handleLogout);
+}
+
+// ============================================
+// SAVE SCOPE FUNCTIONALITY
+// ============================================
+
+// Save scope function (for customers)
+async function saveScope(title, content, contentType) {
+    if (!authToken) {
+        showError('Please login to save scopes');
+        window.location.href = '/login.html';
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/save-scope', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${authToken}`
+            },
+            body: JSON.stringify({
+                title: title || `Saved ${contentType}`,
+                content: content,
+                content_type: contentType
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (!response.ok) {
+            throw new Error(data.error || 'Failed to save scope');
+        }
+        
+        showSuccess('Scope saved successfully!');
+        return data.scope;
+        
+    } catch (error) {
+        console.error('Save scope error:', error);
+        showError(error.message || 'Failed to save scope');
+        throw error;
+    }
+}
+
+// Load user's saved scopes
+async function loadMyScopes() {
+    if (!authToken) {
+        showError('Please login to view your saved scopes');
+        window.location.href = '/login.html';
+        return;
+    }
+    
+    scopesList.innerHTML = '<p>Loading your saved scopes...</p>';
+    myScopesModal.style.display = 'flex';
+    myScopesModal.classList.add('show');
+    
+    try {
+        const response = await fetch('/api/my-scopes', {
+            headers: {
+                'Authorization': `Bearer ${authToken}`
+            }
+        });
+        
+        const data = await response.json();
+        
+        if (!response.ok) {
+            throw new Error(data.error || 'Failed to load scopes');
+        }
+        
+        if (!data.scopes || data.scopes.length === 0) {
+            scopesList.innerHTML = '<div class="empty-state"><p>No saved scopes yet. Save your first scope to see it here!</p></div>';
+            allScopesData = [];
+            return;
+        }
+        
+        // Store all scopes for search filtering
+        allScopesData = data.scopes;
+        
+        // Sort by date (newest first)
+        const sortedScopes = [...data.scopes].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+        
+        // Render scopes
+        renderScopesList(sortedScopes);
+        
+    } catch (error) {
+        console.error('Load scopes error:', error);
+        scopesList.innerHTML = `<p style="color: #e74c3c;">Error: ${error.message}</p>`;
+    }
+}
+
+// Render scopes list (used for initial load and search filtering)
+function renderScopesList(scopesToRender) {
+    if (scopesToRender.length === 0) {
+        scopesList.innerHTML = '<div class="empty-state"><p>No scopes match your search.</p></div>';
+        return;
+    }
+    
+    // Display scopes as expandable list
+    scopesList.innerHTML = scopesToRender.map((scope, index) => `
+            <div class="scope-list-item" data-scope-id="${scope.id}">
+                <div class="scope-list-header" data-expand-target="${scope.id}">
+                    <div class="scope-list-header-content">
+                        <div class="scope-list-icon">
+                            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M2 4L8 2L14 4V7C14 10.5 11.5 13.5 8 14.5C4.5 13.5 2 10.5 2 7V4Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                        </div>
+                        <div class="scope-list-info">
+                            <h4 class="scope-list-title">${escapeHtml(scope.title)}</h4>
+                            <div class="scope-list-meta">
+                                <span class="scope-type-badge scope-type-${scope.content_type.replace('_', '-')}">${scope.content_type.replace('_', ' ')}</span>
+                                <span class="scope-date">${new Date(scope.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="scope-list-actions">
+                        <button class="scope-action-btn scope-expand-btn" data-scope-id="${scope.id}" title="Expand">
+                            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M4 6L8 10L12 6" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                        </button>
+                        <button class="scope-action-btn scope-delete-btn" data-scope-id="${scope.id}" title="Delete">
+                            <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M2 4H14M12.6667 4V13.3333C12.6667 14 12 14.6667 11.3333 14.6667H4.66667C4 14.6667 3.33333 14 3.33333 13.3333V4M5.33333 4V2.66667C5.33333 2 6 1.33333 6.66667 1.33333H9.33333C10 1.33333 10.6667 2 10.6667 2.66667V4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+                <div class="scope-list-content" id="scope-content-${scope.id}" style="display: none;">
+                    <div class="scope-content-wrapper">
+                        <pre class="scope-content-text">${escapeHtml(scope.content)}</pre>
+                        <div class="scope-content-actions">
+                            <button class="btn btn-secondary btn-small scope-copy-btn" data-scope-content="${escapeHtml(scope.content)}">Copy Content</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `).join('');
+        
+        // Add expand/collapse handlers
+        document.querySelectorAll('.scope-expand-btn, .scope-list-header').forEach(element => {
+            element.addEventListener('click', (e) => {
+                // Don't expand if clicking delete button
+                if (e.target.closest('.scope-delete-btn')) return;
+                
+                const scopeId = element.getAttribute('data-scope-id') || element.getAttribute('data-expand-target');
+                const contentDiv = document.getElementById(`scope-content-${scopeId}`);
+                const expandBtn = document.querySelector(`.scope-expand-btn[data-scope-id="${scopeId}"]`);
+                
+                if (contentDiv.style.display === 'none') {
+                    contentDiv.style.display = 'block';
+                    expandBtn.querySelector('svg').style.transform = 'rotate(180deg)';
+                    expandBtn.closest('.scope-list-item').classList.add('expanded');
+                } else {
+                    contentDiv.style.display = 'none';
+                    expandBtn.querySelector('svg').style.transform = 'rotate(0deg)';
+                    expandBtn.closest('.scope-list-item').classList.remove('expanded');
+                }
+            });
+        });
+        
+        // Add delete handlers
+        document.querySelectorAll('.scope-delete-btn').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                e.stopPropagation(); // Prevent expanding when clicking delete
+                const scopeId = btn.getAttribute('data-scope-id');
+                if (confirm('Are you sure you want to delete this scope?')) {
+                    try {
+                        const deleteResponse = await fetch(`/api/scopes/${scopeId}`, {
+                            method: 'DELETE',
+                            headers: {
+                                'Authorization': `Bearer ${authToken}`
+                            }
+                        });
+                        
+                        if (deleteResponse.ok) {
+                            showSuccess('Scope deleted');
+                            loadMyScopes(); // Reload list
+                        } else {
+                            throw new Error('Failed to delete scope');
+                        }
+                    } catch (error) {
+                        showError('Failed to delete scope');
+                    }
+                }
+            });
+        });
+        
+        // Add copy handlers
+        document.querySelectorAll('.scope-copy-btn').forEach(btn => {
+            btn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                const content = btn.getAttribute('data-scope-content');
+                try {
+                    await navigator.clipboard.writeText(content);
+                    showSuccess('Content copied to clipboard!');
+                } catch (error) {
+                    showError('Failed to copy content');
+                }
+            });
+        });
+}
+
+// Helper to escape HTML
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// My Scopes button handler
+if (myScopesBtn) {
+    myScopesBtn.addEventListener('click', () => {
+        loadMyScopes();
+        // Clear search when opening modal
+        if (scopesSearch) {
+            scopesSearch.value = '';
+        }
+    });
+}
+
+// Search/filter scopes
+if (scopesSearch) {
+    scopesSearch.addEventListener('input', (e) => {
+        const searchTerm = e.target.value.toLowerCase().trim();
+        
+        if (!searchTerm) {
+            // Show all scopes if search is empty
+            const sortedScopes = [...allScopesData].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+            renderScopesList(sortedScopes);
+            return;
+        }
+        
+        // Filter scopes by title or content
+        const filteredScopes = allScopesData.filter(scope => {
+            const titleMatch = scope.title.toLowerCase().includes(searchTerm);
+            const contentMatch = scope.content.toLowerCase().includes(searchTerm);
+            return titleMatch || contentMatch;
+        });
+        
+        // Sort filtered results by date (newest first)
+        const sortedFiltered = filteredScopes.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+        renderScopesList(sortedFiltered);
+    });
+}
+
+// Close scopes modal
+if (closeScopesModal) {
+    closeScopesModal.addEventListener('click', () => {
+        if (myScopesModal) {
+            myScopesModal.style.display = 'none';
+            myScopesModal.classList.remove('show');
+        }
+    });
+}
+if (closeScopesModalBtn) {
+    closeScopesModalBtn.addEventListener('click', () => {
+        if (myScopesModal) {
+            myScopesModal.style.display = 'none';
+            myScopesModal.classList.remove('show');
+        }
+    });
+}
+
+// Add "My Scopes" button to header (for logged in users)
+// We'll add this dynamically based on auth state
+
+// ============================================
+// UPDATE EXPORT BUTTONS TO BE ROLE-BASED
+// ============================================
+
+// Authentication check happens in checkAuthOnLoad() above

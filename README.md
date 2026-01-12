@@ -112,6 +112,14 @@ Create a `.env` file in the project root (see `.env.example` for template):
 - `CONFLUENCE_API_TOKEN`: Your Confluence API token ([create one here](https://id.atlassian.com/manage-profile/security/api-tokens))
 - `CONFLUENCE_SPACE_KEY`: Your Confluence space key (e.g., `NM`, `PROD`, `ENG`)
 
+**Optional (for Supabase authentication):**
+- `SUPABASE_URL`: Your Supabase project URL
+- `SUPABASE_SERVICE_ROLE_KEY`: Your Supabase service role key
+
+**Optional (for Beehiiv newsletter integration):**
+- `BEEHIV_API_KEY` or `BEEHIIV_API_KEY`: Your Beehiiv API key
+- `BEEHIV_PUBLICATION_ID` or `BEEHIIV_PUBLICATION_ID`: Your Beehiiv publication ID (with `pub_` prefix for v2)
+
 **Other:**
 - `PORT` (optional): Server port (defaults to 3000)
 

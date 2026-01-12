@@ -432,6 +432,64 @@ textarea:focus {
     word-break: break-word;
 }
 
+/* Editable textarea for hypothesis editing */
+.hypothesis-output-edit {
+    background-color: #0A0E17; /* Vantum Midnight Black */
+    color: #FFFFFF; /* White text */
+    border: 2px solid #3498db; /* Blue border when editing */
+    border-radius: 6px;
+    padding: 25px;
+    font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
+    font-size: 14px;
+    line-height: 1.7;
+    max-height: 600px;
+    min-height: 400px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    width: 100%;
+    resize: vertical;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    word-wrap: break-word;
+    word-break: break-word;
+}
+
+.hypothesis-output-edit:focus {
+    outline: none;
+    border-color: #3498db;
+    box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.2);
+}
+
+/* Icon button styles for edit/save/cancel */
+.btn-icon {
+    background: transparent;
+    border: 1px solid #A3A6B4;
+    border-radius: 4px;
+    padding: 6px 8px;
+    cursor: pointer;
+    color: #FFFFFF;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    min-width: 32px;
+    height: 32px;
+}
+
+.btn-icon:hover {
+    background-color: #1A1E29;
+    border-color: #3498db;
+    color: #3498db;
+}
+
+.btn-icon:active {
+    transform: scale(0.95);
+}
+
+.btn-icon svg {
+    width: 16px;
+    height: 16px;
+}
+
 /* Styling for rendered HTML content in output areas */
 .hypothesis-output h1,
 .output h1,

@@ -26,10 +26,19 @@ console.log('OPENAI_API_KEY length:', process.env.OPENAI_API_KEY ? process.env.O
 console.log('=======================');
 
 // Check for required environment variables
+// Note: We check this early so the app fails fast if misconfigured
 if (!process.env.OPENAI_API_KEY) {
+  console.error('========================================');
   console.error('ERROR: OPENAI_API_KEY environment variable is not set!');
+  console.error('========================================');
   console.error('Please add OPENAI_API_KEY to your .env file (locally) or Railway environment variables (deployment).');
   console.error('Debug: All env vars:', Object.keys(process.env).filter(k => k.includes('OPENAI')).join(', ') || 'None found');
+  console.error('Total environment variables available:', Object.keys(process.env).length);
+  console.error('========================================');
+  console.error('Server will exit with code 1');
+  console.error('========================================');
+  // Exit with error code - this will crash the container
+  // Railway will show this as a failed deployment
   process.exit(1);
 }
 
@@ -51,7 +60,7 @@ You are a Senior Growth Product Manager and Experimentation Lead.
 
 I am going to give you a raw, unstructured brain dump about a product, feature, or system.
 
-Your job is not to clean it up immediately.
+
 
 Your job is to:
 
@@ -81,7 +90,7 @@ Do not guess missing data
 
 Do not invent metrics I didn't imply
 
-If information is missing, ask targeted questions at the end
+If information is missing, ask targeted questions at the end, but if there is enough context, just move on.
 
 Hypotheses must be visible before explanation
 
@@ -1298,6 +1307,85 @@ const CONFLUENCE_CONFIG = {
   apiToken: process.env.CONFLUENCE_API_TOKEN,
   space: process.env.CONFLUENCE_SPACE_KEY
 };
+
+// API endpoint: Generate a short, usable page title based on content
+// This creates a concise title suitable for Confluence pages
+app.post('/api/generate-title', async (req, res) => {
+  try {
+    const { content, contentType } = req.body;
+    
+    // Validate input
+    if (!content || content.trim().length === 0) {
+      return res.status(400).json({ error: 'Content is required to generate a title' });
+    }
+    
+    // Create a prompt for title generation
+    // Keep it short and focused - we want a usable title, not a description
+    const titlePrompt = `Generate a short, clear, and professional title for a Confluence ${contentType || 'page'} based on the following content.
+
+Requirements:
+- Maximum 60 characters
+- Clear and descriptive
+- Professional tone
+- No prefixes like "Title:" or quotes
+- Focus on the main topic or key concept
+- Use title case (capitalize important words)
+
+Content:
+${content.substring(0, 2000)}${content.length > 2000 ? '...' : ''}
+
+Title:`;
+    
+    // Call OpenAI API - use gpt-4o for faster response (simple task)
+    const completion = await openai.chat.completions.create({
+      model: 'gpt-4o',
+      messages: [
+        {
+          role: 'user',
+          content: titlePrompt
+        }
+      ],
+      temperature: 0.7,
+      max_tokens: 50 // Short title, so we don't need many tokens
+    });
+    
+    // Extract and clean the title
+    let title = completion.choices[0]?.message?.content?.trim() || '';
+    
+    // If we didn't get a title, try to extract from content as fallback
+    if (!title || title.length === 0) {
+      // Extract first line or first 50 characters as fallback
+      const firstLine = content.split('\n')[0].trim();
+      title = firstLine.length > 60 ? firstLine.substring(0, 57) + '...' : firstLine;
+    }
+    
+    // Remove quotes if present
+    title = title.replace(/^["']|["']$/g, '');
+    
+    // Remove "Title:" prefix if present
+    title = title.replace(/^Title:\s*/i, '');
+    
+    // Remove any trailing periods or extra whitespace
+    title = title.replace(/\.+$/, '').trim();
+    
+    // Trim to 60 characters max (Confluence has limits)
+    if (title.length > 60) {
+      title = title.substring(0, 57) + '...';
+    }
+    
+    // Ensure we have a title (final fallback)
+    if (!title || title.length === 0) {
+      title = contentType === 'hypothesis' ? 'New Hypothesis' : contentType === 'scope' ? 'New Scope' : 'New Quick Scope';
+    }
+    
+    // Return the generated title
+    res.json({ title });
+    
+  } catch (error) {
+    console.error('Error generating title:', error);
+    res.status(500).json({ error: 'Failed to generate title: ' + error.message });
+  }
+});
 
 // API endpoint: Export content to Confluence
 app.post('/api/export-to-confluence', async (req, res) => {

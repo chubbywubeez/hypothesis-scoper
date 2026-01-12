@@ -63,6 +63,21 @@
             <div class="section-header">
                 <h2>2. Your Hypothesis</h2>
                 <div class="header-actions">
+                    <button id="edit-hypothesis-btn" class="btn-icon" title="Edit hypothesis">
+                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M11.333 2.00001C11.5084 1.82472 11.7163 1.68603 11.9444 1.59229C12.1726 1.49856 12.4162 1.45166 12.662 1.45423C12.9079 1.45679 13.1506 1.50878 13.3765 1.60706C13.6025 1.70535 13.8073 1.84806 13.9793 2.02759C14.1512 2.20712 14.287 2.42004 14.3794 2.65369C14.4717 2.88734 14.5188 3.13748 14.518 3.39001C14.5173 3.64254 14.4687 3.89233 14.375 4.12468C14.2813 4.35704 14.1442 4.56857 13.9713 4.74668L6.414 12.304L2 13.3333L3.02934 8.91934L10.5867 1.36201L11.333 2.00001Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                    </button>
+                    <button id="save-hypothesis-btn" class="btn-icon" title="Save changes" style="display: none;">
+                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M13.3333 4.00001L6 11.3333L2.66667 8.00001" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                    </button>
+                    <button id="cancel-edit-hypothesis-btn" class="btn-icon" title="Cancel editing" style="display: none;">
+                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M12 4L4 12M4 4L12 12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                    </button>
                     <button id="export-hypothesis-confluence-btn" class="btn btn-secondary btn-small">
                         Export to Confluence
                     </button>
@@ -75,6 +90,7 @@
             <!-- Hypothesis Output -->
             <div class="hypothesis-panel">
                 <div id="hypothesis-output" class="output hypothesis-output"></div>
+                <textarea id="hypothesis-output-edit" class="output hypothesis-output-edit" style="display: none;"></textarea>
             </div>
             
             <div class="action-buttons">
@@ -169,8 +185,8 @@
             <div class="confluence-modal-body">
                 <div class="confluence-form-group">
                     <label for="confluence-page-title">Page Title *</label>
-                    <input type="text" id="confluence-page-title" placeholder="Hypothesis: [Your Idea Name]" />
-                    <small>The title for the new Confluence page (will be created in the NM space)</small>
+                    <input type="text" id="confluence-page-title" placeholder="Generating title..." />
+                    <small>The title for the new Confluence page (will be created in the NM space). Title is generated automatically.</small>
                 </div>
                 <div class="confluence-form-group">
                     <label for="confluence-parent-id">Parent Page ID (Optional)</label>

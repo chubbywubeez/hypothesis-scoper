@@ -9,6 +9,9 @@ let rawHypothesisContent = '';
 let rawScopeContent = '';
 let rawQuickScopeContent = '';
 
+// Store original content when editing (for cancel functionality)
+let originalHypothesisContent = '';
+
 // Progress tracking for loading bars
 let progressInterval = null;
 let startTime = null;
@@ -209,7 +212,11 @@ const ideaInput = document.getElementById('idea-input');
 const generateHypothesisBtn = document.getElementById('generate-hypothesis-btn');
 const hypothesisSection = document.getElementById('hypothesis-section');
 const hypothesisOutput = document.getElementById('hypothesis-output');
+const hypothesisOutputEdit = document.getElementById('hypothesis-output-edit');
 const copyHypothesisBtn = document.getElementById('copy-hypothesis-btn');
+const editHypothesisBtn = document.getElementById('edit-hypothesis-btn');
+const saveHypothesisBtn = document.getElementById('save-hypothesis-btn');
+const cancelEditHypothesisBtn = document.getElementById('cancel-edit-hypothesis-btn');
 const generateScopeBtn = document.getElementById('generate-scope-btn');
 const scopeSection = document.getElementById('scope-section');
 const scopeOutput = document.getElementById('scope-output');
@@ -438,7 +445,11 @@ generateHypothesisBtn.addEventListener('click', async () => {
 
 // Generate scope from hypothesis
 generateScopeBtn.addEventListener('click', async () => {
-    const hypothesis = rawHypothesisContent || hypothesisOutput.textContent.trim();
+    // Use edited content if available, otherwise use raw or extract from display
+    // If we're in edit mode, use the textarea content
+    const hypothesis = hypothesisOutputEdit.style.display !== 'none' 
+        ? hypothesisOutputEdit.value.trim()
+        : rawHypothesisContent || hypothesisOutput.textContent.trim();
     
     if (!hypothesis) {
         showError('Please generate a hypothesis first.');
@@ -546,6 +557,81 @@ generateScopeBtn.addEventListener('click', async () => {
     }
 });
 
+// Edit hypothesis functionality
+// Store original content and switch to edit mode
+editHypothesisBtn.addEventListener('click', () => {
+    // Get the current content (raw markdown if available, otherwise extract from HTML)
+    const currentContent = rawHypothesisContent || hypothesisOutput.textContent.trim();
+    
+    if (!currentContent) {
+        showError('No hypothesis to edit.');
+        return;
+    }
+    
+    // Store original content for cancel functionality
+    originalHypothesisContent = currentContent;
+    
+    // Switch to edit mode
+    hypothesisOutput.style.display = 'none';
+    hypothesisOutputEdit.style.display = 'block';
+    hypothesisOutputEdit.value = currentContent;
+    hypothesisOutputEdit.focus();
+    
+    // Update button visibility
+    editHypothesisBtn.style.display = 'none';
+    saveHypothesisBtn.style.display = 'inline-flex';
+    cancelEditHypothesisBtn.style.display = 'inline-flex';
+});
+
+// Save edited hypothesis
+saveHypothesisBtn.addEventListener('click', () => {
+    const editedContent = hypothesisOutputEdit.value.trim();
+    
+    if (!editedContent) {
+        showError('Cannot save empty hypothesis.');
+        return;
+    }
+    
+    // Update raw content with edited version
+    rawHypothesisContent = editedContent;
+    
+    // Update display with formatted HTML
+    hypothesisOutput.innerHTML = markdownToHtml(editedContent);
+    
+    // Switch back to display mode
+    hypothesisOutput.style.display = 'block';
+    hypothesisOutputEdit.style.display = 'none';
+    
+    // Update button visibility
+    editHypothesisBtn.style.display = 'inline-flex';
+    saveHypothesisBtn.style.display = 'none';
+    cancelEditHypothesisBtn.style.display = 'none';
+    
+    // Clear original content (changes are saved)
+    originalHypothesisContent = '';
+});
+
+// Cancel editing and restore original
+cancelEditHypothesisBtn.addEventListener('click', () => {
+    // Restore original content
+    if (originalHypothesisContent) {
+        rawHypothesisContent = originalHypothesisContent;
+        hypothesisOutput.innerHTML = markdownToHtml(originalHypothesisContent);
+    }
+    
+    // Switch back to display mode
+    hypothesisOutput.style.display = 'block';
+    hypothesisOutputEdit.style.display = 'none';
+    
+    // Update button visibility
+    editHypothesisBtn.style.display = 'inline-flex';
+    saveHypothesisBtn.style.display = 'none';
+    cancelEditHypothesisBtn.style.display = 'none';
+    
+    // Clear original content
+    originalHypothesisContent = '';
+});
+
 // Copy hypothesis to clipboard
 copyHypothesisBtn.addEventListener('click', async () => {
     const text = hypothesisOutput.textContent;
@@ -627,12 +713,17 @@ copyQuickScopeBtn.addEventListener('click', async () => {
 // Confluence Export handlers
 // Open Confluence modal and store content to export
 exportHypothesisConfluenceBtn.addEventListener('click', () => {
-    const text = rawHypothesisContent || hypothesisOutput.textContent.trim();
+    // Use edited content if available, otherwise use raw or extract from display
+    // If we're in edit mode, use the textarea content
+    const text = hypothesisOutputEdit.style.display !== 'none' 
+        ? hypothesisOutputEdit.value.trim()
+        : rawHypothesisContent || hypothesisOutput.textContent.trim();
+    
     if (!text) {
         showError('No hypothesis to export.');
         return;
     }
-    currentContentToExport = text; // Use raw markdown for export
+    currentContentToExport = text; // Use raw markdown for export (or edited version)
     currentExportType = 'hypothesis';
     openConfluenceModal();
 });
@@ -660,25 +751,22 @@ exportQuickScopeConfluenceBtn.addEventListener('click', () => {
 });
 
 // Open Confluence modal function
-function openConfluenceModal() {
-    // Set default page title based on content type
-    // Credentials are hardcoded on the server, so we only need page title
-    const defaultTitle = currentExportType === 'hypothesis' 
-        ? 'Hypothesis: ' + (ideaInput.value.trim().substring(0, 50) || 'New Hypothesis')
-        : currentExportType === 'scope'
-        ? 'Scope: ' + (ideaInput.value.trim().substring(0, 50) || 'New Scope')
-        : 'Quick Scope: ' + (ideaInput.value.trim().substring(0, 50) || 'New Quick Scope');
-    confluencePageTitle.value = defaultTitle;
-    
+async function openConfluenceModal() {
     // Clear parent ID
     confluenceParentId.value = '';
     
     // Hide any previous status messages
     confluenceStatus.style.display = 'none';
     
-    // Show modal
+    // Show modal first (so user sees it immediately)
     confluenceModal.style.display = 'flex';
     confluenceModal.classList.add('show');
+    
+    // Set a placeholder title while generating
+    confluencePageTitle.value = 'Generating title...';
+    
+    // Auto-generate title using AI - runs automatically when modal opens
+    await generateConfluenceTitle();
 }
 
 // Close Confluence modal function
@@ -686,6 +774,79 @@ function closeConfluenceModalFunc() {
     confluenceModal.style.display = 'none';
     confluenceModal.classList.remove('show');
     confluenceStatus.style.display = 'none';
+}
+
+// Generate title function - uses AI to create a short, usable title
+// Runs automatically when modal opens
+async function generateConfluenceTitle() {
+    // Validate that we have content to generate a title from
+    if (!currentContentToExport || currentContentToExport.trim().length === 0) {
+        console.error('No content available to generate title. Content length:', currentContentToExport?.length || 0);
+        const defaultTitle = currentExportType === 'hypothesis' 
+            ? 'Hypothesis: ' + (ideaInput.value.trim().substring(0, 50) || 'New Hypothesis')
+            : currentExportType === 'scope'
+            ? 'Scope: ' + (ideaInput.value.trim().substring(0, 50) || 'New Scope')
+            : 'Quick Scope: ' + (ideaInput.value.trim().substring(0, 50) || 'New Quick Scope');
+        confluencePageTitle.value = defaultTitle;
+        return;
+    }
+    
+    // Keep showing "Generating title..." while we fetch
+    confluencePageTitle.value = 'Generating title...';
+    
+    try {
+        console.log('Generating title for content type:', currentExportType, 'Content length:', currentContentToExport.length);
+        
+        const response = await fetch('/api/generate-title', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                content: currentContentToExport,
+                contentType: currentExportType === 'hypothesis' ? 'hypothesis' : currentExportType === 'scope' ? 'scope' : 'quick scope'
+            })
+        });
+        
+        console.log('Title generation response status:', response.status);
+        
+        // Check if response is ok before parsing
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Title generation failed with status:', response.status, 'Error:', errorText);
+            let errorData;
+            try {
+                errorData = JSON.parse(errorText);
+            } catch (e) {
+                errorData = { error: errorText || `HTTP ${response.status}` };
+            }
+            throw new Error(errorData.error || 'Failed to generate title');
+        }
+        
+        const data = await response.json();
+        console.log('Title generation response data:', data);
+        
+        // Validate that we got a title
+        if (!data || !data.title || data.title.trim().length === 0) {
+            console.error('Empty title received from server');
+            throw new Error('Empty title received from server');
+        }
+        
+        // Set the generated title
+        confluencePageTitle.value = data.title.trim();
+        console.log('Title generated successfully:', data.title.trim());
+        
+    } catch (error) {
+        console.error('Error generating title:', error);
+        // If generation fails, use a simple default based on content type
+        const defaultTitle = currentExportType === 'hypothesis' 
+            ? 'Hypothesis: ' + (ideaInput.value.trim().substring(0, 50) || 'New Hypothesis')
+            : currentExportType === 'scope'
+            ? 'Scope: ' + (ideaInput.value.trim().substring(0, 50) || 'New Scope')
+            : 'Quick Scope: ' + (ideaInput.value.trim().substring(0, 50) || 'New Quick Scope');
+        confluencePageTitle.value = defaultTitle;
+        console.log('Using default title:', defaultTitle);
+    }
 }
 
 // Close modal handlers

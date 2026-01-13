@@ -420,6 +420,12 @@ const advancedChatMessages = document.getElementById('advanced-chat-messages');
 const advancedChatInput = document.getElementById('advanced-chat-input');
 const advancedSendBtn = document.getElementById('advanced-send-btn');
 
+// Payment Modal elements
+const paymentModal = document.getElementById('payment-modal');
+const closePaymentModal = document.getElementById('close-payment-modal');
+const paymentCancelBtn = document.getElementById('payment-cancel-btn');
+const paymentUpgradeBtn = document.getElementById('payment-upgrade-btn');
+
 // Store conversation history for advanced mode
 let advancedConversationHistory = [];
 

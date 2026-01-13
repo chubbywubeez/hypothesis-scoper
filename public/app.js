@@ -5,6 +5,94 @@
 let currentUser = null;
 let authToken = null;
 let userRole = null;
+let subscriptionStatus = null; // 'active', 'inactive', or null
+let hasAdvancedAccess = false; // Cached access status
+
+// Check if token is expired or about to expire (within 5 minutes)
+function isTokenExpired() {
+    const expiresAt = localStorage.getItem('tokenExpiresAt');
+    if (!expiresAt) return true; // No expiration info, assume expired
+    
+    // Convert expires_at (seconds since epoch) to milliseconds
+    const expirationTime = parseInt(expiresAt) * 1000;
+    const now = Date.now();
+    const fiveMinutes = 5 * 60 * 1000; // 5 minutes in milliseconds
+    
+    // Return true if expired or expires within 5 minutes
+    return (expirationTime - now) < fiveMinutes;
+}
+
+// Refresh the access token using the refresh token
+async function refreshAccessToken() {
+    const refreshToken = localStorage.getItem('refreshToken');
+    
+    if (!refreshToken) {
+        // No refresh token, user needs to login again
+        return false;
+    }
+    
+    try {
+        const response = await fetch('/api/auth/refresh', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ refresh_token: refreshToken })
+        });
+        
+        if (!response.ok) {
+            // Refresh failed, clear tokens and return false
+            localStorage.removeItem('authToken');
+            localStorage.removeItem('refreshToken');
+            localStorage.removeItem('tokenExpiresAt');
+            return false;
+        }
+        
+        const data = await response.json();
+        
+        // Update stored tokens
+        localStorage.setItem('authToken', data.access_token);
+        if (data.refresh_token) {
+            localStorage.setItem('refreshToken', data.refresh_token);
+        }
+        if (data.expires_at) {
+            localStorage.setItem('tokenExpiresAt', data.expires_at);
+        }
+        
+        // Update global auth state
+        authToken = data.access_token;
+        currentUser = data.user;
+        userRole = data.user.role;
+        
+        return true;
+    } catch (error) {
+        console.error('Token refresh error:', error);
+        // Clear tokens on error
+        localStorage.removeItem('authToken');
+        localStorage.removeItem('refreshToken');
+        localStorage.removeItem('tokenExpiresAt');
+        return false;
+    }
+}
+
+// Get a valid access token, refreshing if necessary
+async function getValidToken() {
+    let token = localStorage.getItem('authToken');
+    
+    // Check if token is expired or about to expire
+    if (isTokenExpired()) {
+        console.log('Token expired or expiring soon, refreshing...');
+        const refreshed = await refreshAccessToken();
+        if (!refreshed) {
+            // Refresh failed, redirect to login
+            window.location.href = '/login.html';
+            return null;
+        }
+        token = localStorage.getItem('authToken');
+    }
+    
+    return token;
+}
 
 // Check authentication on page load - redirect to login if not authenticated
 async function checkAuthOnLoad() {
@@ -16,19 +104,45 @@ async function checkAuthOnLoad() {
         return;
     }
     
+    // Check if token needs refresh
+    if (isTokenExpired()) {
+        const refreshed = await refreshAccessToken();
+        if (!refreshed) {
+            // Refresh failed, redirect to login
+            window.location.href = '/login.html';
+            return;
+        }
+    }
+    
     // Set token and verify it's still valid
     authToken = savedToken;
-    const isValid = await checkAuth(savedToken);
+    const isValid = await checkAuth(authToken);
     if (!isValid) {
-        // Token invalid, redirect to login
-        authToken = null;
-        localStorage.removeItem('authToken');
-        window.location.href = '/login.html';
-        return;
+        // Token invalid, try refreshing once more
+        const refreshed = await refreshAccessToken();
+        if (!refreshed) {
+            // Refresh failed, redirect to login
+            authToken = null;
+            localStorage.removeItem('authToken');
+            localStorage.removeItem('refreshToken');
+            localStorage.removeItem('tokenExpiresAt');
+            window.location.href = '/login.html';
+            return;
+        }
+        // Retry auth check with new token
+        authToken = localStorage.getItem('authToken');
+        const retryValid = await checkAuth(authToken);
+        if (!retryValid) {
+            window.location.href = '/login.html';
+            return;
+        }
     }
     
     // Token is valid, initialize UI
     updateUIForAuth();
+    
+    // Check subscription status after auth
+    await checkSubscriptionStatus();
 }
 
 // Check authentication when page loads
@@ -947,9 +1061,10 @@ confluenceExportBtn.addEventListener('click', async () => {
     showConfluenceStatus('Exporting to Confluence...', 'success');
     
     try {
-        // Check if user is authenticated
-        if (!authToken) {
-            showConfluenceStatus('Error: Please log in to export to Confluence', 'error');
+        // Get valid token (refresh if needed)
+        const token = await getValidToken();
+        if (!token) {
+            showConfluenceStatus('Error: Session expired. Please login again.', 'error');
             return;
         }
         
@@ -958,7 +1073,7 @@ confluenceExportBtn.addEventListener('click', async () => {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${authToken}`
+                'Authorization': `Bearer ${token}`
             },
             body: JSON.stringify({
                 // Credentials are hardcoded on server, only send content and metadata
@@ -1149,7 +1264,19 @@ ideaInput.addEventListener('keydown', (e) => {
 });
 
 // Advanced Mode functionality
-advancedModeBtn.addEventListener('click', () => {
+advancedModeBtn.addEventListener('click', async () => {
+    // Check subscription status before opening
+    if (!hasAdvancedAccess && userRole !== 'internal') {
+        // Check subscription status
+        await checkSubscriptionStatus();
+        
+        if (!hasAdvancedAccess && userRole !== 'internal') {
+            // Show payment modal
+            openPaymentModal();
+            return;
+        }
+    }
+    
     openAdvancedModal();
 });
 
@@ -1184,6 +1311,43 @@ function closeAdvancedModalFunc() {
     advancedChatInput.value = '';
     advancedConversationHistory = [];
 }
+
+// Payment Modal functions
+function openPaymentModal() {
+    if (paymentModal) {
+        paymentModal.style.display = 'flex';
+        paymentModal.classList.add('show');
+    }
+}
+
+function closePaymentModalFunc() {
+    if (paymentModal) {
+        paymentModal.style.display = 'none';
+        paymentModal.classList.remove('show');
+    }
+}
+
+// Payment Modal event listeners
+if (closePaymentModal) {
+    closePaymentModal.addEventListener('click', closePaymentModalFunc);
+}
+
+if (paymentCancelBtn) {
+    paymentCancelBtn.addEventListener('click', closePaymentModalFunc);
+}
+
+if (paymentUpgradeBtn) {
+    paymentUpgradeBtn.addEventListener('click', () => {
+        createCheckoutSession();
+    });
+}
+
+// Close payment modal with Escape key
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && paymentModal && paymentModal.style.display !== 'none') {
+        closePaymentModalFunc();
+    }
+});
 
 function addAdvancedWelcomeMessage() {
     const welcomeMessage = `Share your product idea, feature, or system.
@@ -1270,12 +1434,21 @@ async function sendAdvancedMessage() {
     advancedChatMessages.appendChild(loadingDiv);
     advancedChatMessages.scrollTop = advancedChatMessages.scrollHeight;
     
+    // Get valid token (refresh if needed)
+    const token = await getValidToken();
+    if (!token) {
+        showError('Session expired. Please login again.');
+        closeAdvancedModalFunc();
+        return;
+    }
+    
     try {
         // Call API to get assistant response
         const response = await fetch('/api/advanced-conversation', {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
             },
             body: JSON.stringify({
                 conversation: advancedConversationHistory
@@ -1408,11 +1581,19 @@ generateFromAdvancedBtn.addEventListener('click', async () => {
         // Scroll to hypothesis section
         hypothesisSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
         
+        // Get valid token (refresh if needed)
+        const token = await getValidToken();
+        if (!token) {
+            showError('Session expired. Please login again.');
+            return;
+        }
+        
         // Call API with conversation history (using the stored copy)
         const response = await fetch('/api/generate-hypothesis-advanced', {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
             },
             body: JSON.stringify({
                 conversation: conversationToUse
@@ -1498,6 +1679,98 @@ generateFromAdvancedBtn.addEventListener('click', async () => {
 });
 
 // ============================================
+// SUBSCRIPTION FUNCTIONS
+// ============================================
+
+// Check subscription status
+async function checkSubscriptionStatus() {
+    if (!authToken) {
+        hasAdvancedAccess = false;
+        return false;
+    }
+    
+    // Get valid token (refresh if needed)
+    const token = await getValidToken();
+    if (!token) {
+        hasAdvancedAccess = false;
+        return false;
+    }
+    
+    try {
+        const response = await fetch('/api/subscription/status', {
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+        
+        if (response.ok) {
+            const data = await response.json();
+            hasAdvancedAccess = data.hasAccess;
+            subscriptionStatus = data.subscriptionStatus;
+            
+            // Update UI based on access
+            updateAdvancedModeButton();
+            
+            return hasAdvancedAccess;
+        } else {
+            hasAdvancedAccess = false;
+            return false;
+        }
+    } catch (error) {
+        console.error('Subscription check error:', error);
+        hasAdvancedAccess = false;
+        return false;
+    }
+}
+
+// Update Advanced Mode button based on subscription status
+function updateAdvancedModeButton() {
+    if (advancedModeBtn) {
+        if (hasAdvancedAccess || userRole === 'internal') {
+            advancedModeBtn.textContent = 'Advanced Mode';
+            advancedModeBtn.classList.remove('btn-locked');
+        } else {
+            advancedModeBtn.textContent = 'Advanced Mode 🔒';
+            advancedModeBtn.classList.add('btn-locked');
+        }
+    }
+}
+
+// Create Stripe checkout session
+async function createCheckoutSession() {
+    // Get valid token (refresh if needed)
+    const token = await getValidToken();
+    if (!token) {
+        showError('Session expired. Please login again.');
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/stripe/create-checkout-session', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            }
+        });
+        
+        const data = await response.json();
+        
+        if (!response.ok) {
+            throw new Error(data.error || 'Failed to create checkout session');
+        }
+        
+        // Redirect to Stripe Checkout
+        if (data.url) {
+            window.location.href = data.url;
+        }
+    } catch (error) {
+        console.error('Checkout error:', error);
+        showError(error.message || 'Failed to start checkout. Please try again.');
+    }
+}
+
+// ============================================
 // AUTHENTICATION FUNCTIONS
 // ============================================
 
@@ -1517,8 +1790,29 @@ async function checkAuth(token) {
             updateUIForAuth();
             return true;
         } else {
-            // Token invalid, clear it
+            // Token invalid, try refreshing
+            const refreshed = await refreshAccessToken();
+            if (refreshed) {
+                // Retry with new token
+                const newToken = localStorage.getItem('authToken');
+                const retryResponse = await fetch('/api/auth/me', {
+                    headers: {
+                        'Authorization': `Bearer ${newToken}`
+                    }
+                });
+                if (retryResponse.ok) {
+                    const retryData = await retryResponse.json();
+                    currentUser = retryData.user;
+                    userRole = retryData.user.role;
+                    authToken = newToken;
+                    updateUIForAuth();
+                    return true;
+                }
+            }
+            // Refresh failed or retry failed, clear tokens
             localStorage.removeItem('authToken');
+            localStorage.removeItem('refreshToken');
+            localStorage.removeItem('tokenExpiresAt');
             authToken = null;
             currentUser = null;
             userRole = null;
@@ -1637,7 +1931,10 @@ function handleLogout() {
     authToken = null;
     currentUser = null;
     userRole = null;
+    // Clear all auth-related data from localStorage
     localStorage.removeItem('authToken');
+    localStorage.removeItem('refreshToken');
+    localStorage.removeItem('tokenExpiresAt');
     updateUIForAuth();
     showSuccess('Logged out successfully');
     // Redirect to login page
@@ -1661,9 +1958,10 @@ if (logoutBtn) {
 
 // Save scope function (for customers)
 async function saveScope(title, content, contentType) {
-    if (!authToken) {
-        showError('Please login to save scopes');
-        window.location.href = '/login.html';
+    // Get valid token (refresh if needed)
+    const token = await getValidToken();
+    if (!token) {
+        showError('Session expired. Please login again.');
         return;
     }
     
@@ -1672,7 +1970,7 @@ async function saveScope(title, content, contentType) {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${authToken}`
+                'Authorization': `Bearer ${token}`
             },
             body: JSON.stringify({
                 title: title || `Saved ${contentType}`,
@@ -1709,10 +2007,18 @@ async function loadMyScopes() {
     myScopesModal.style.display = 'flex';
     myScopesModal.classList.add('show');
     
+    // Get valid token (refresh if needed)
+    const token = await getValidToken();
+    if (!token) {
+        showError('Session expired. Please login again.');
+        myScopesModal.classList.remove('show');
+        return;
+    }
+    
     try {
         const response = await fetch('/api/my-scopes', {
             headers: {
-                'Authorization': `Bearer ${authToken}`
+                'Authorization': `Bearer ${token}`
             }
         });
         
@@ -1820,11 +2126,18 @@ function renderScopesList(scopesToRender) {
                 e.stopPropagation(); // Prevent expanding when clicking delete
                 const scopeId = btn.getAttribute('data-scope-id');
                 if (confirm('Are you sure you want to delete this scope?')) {
+                    // Get valid token (refresh if needed)
+                    const token = await getValidToken();
+                    if (!token) {
+                        showError('Session expired. Please login again.');
+                        return;
+                    }
+                    
                     try {
                         const deleteResponse = await fetch(`/api/scopes/${scopeId}`, {
                             method: 'DELETE',
                             headers: {
-                                'Authorization': `Bearer ${authToken}`
+                                'Authorization': `Bearer ${token}`
                             }
                         });
                         

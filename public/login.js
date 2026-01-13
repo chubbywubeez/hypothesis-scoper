@@ -122,8 +122,14 @@ async function handleLogin() {
             throw new Error(data.error || 'Login failed');
         }
         
-        // Save token and redirect
+        // Save tokens and expiration for persistent sessions
         localStorage.setItem('authToken', data.access_token);
+        if (data.refresh_token) {
+            localStorage.setItem('refreshToken', data.refresh_token);
+        }
+        if (data.expires_at) {
+            localStorage.setItem('tokenExpiresAt', data.expires_at);
+        }
         window.location.href = '/';
         
     } catch (error) {

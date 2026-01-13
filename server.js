@@ -6,6 +6,7 @@ const cors = require('cors');
 const OpenAI = require('openai');
 const https = require('https');
 const { createClient } = require('@supabase/supabase-js');
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 require('dotenv').config();
 
 const app = express();
@@ -665,6 +666,47 @@ app.post('/api/advanced-conversation', async (req, res) => {
   res.setHeader('Connection', 'keep-alive');
 
   try {
+    // Check authentication and subscription
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      res.write(`data: ${JSON.stringify({ error: 'Authentication required' })}\n\n`);
+      res.end();
+      return;
+    }
+    
+    const token = authHeader.substring(7);
+    
+    if (!supabase) {
+      res.write(`data: ${JSON.stringify({ error: 'Server configuration error' })}\n\n`);
+      res.end();
+      return;
+    }
+    
+    // Verify token and get user
+    const { data: { user }, error: userError } = await supabase.auth.getUser(token);
+    
+    if (userError || !user) {
+      res.write(`data: ${JSON.stringify({ error: 'Invalid or expired token' })}\n\n`);
+      res.end();
+      return;
+    }
+    
+    // Get user profile to check role
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .single();
+    
+    // Check if user has access to Advanced Mode
+    const hasAccess = await hasAdvancedModeAccess(user.id, profile?.role || 'customer');
+    
+    if (!hasAccess) {
+      res.write(`data: ${JSON.stringify({ error: 'Subscription required. Please upgrade to access Advanced Mode.' })}\n\n`);
+      res.end();
+      return;
+    }
+    
     const { conversation } = req.body;
 
     // Validate input
@@ -895,6 +937,47 @@ app.post('/api/generate-hypothesis-advanced', async (req, res) => {
   res.setHeader('Connection', 'keep-alive');
 
   try {
+    // Check authentication and subscription
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      res.write(`data: ${JSON.stringify({ error: 'Authentication required' })}\n\n`);
+      res.end();
+      return;
+    }
+    
+    const token = authHeader.substring(7);
+    
+    if (!supabase) {
+      res.write(`data: ${JSON.stringify({ error: 'Server configuration error' })}\n\n`);
+      res.end();
+      return;
+    }
+    
+    // Verify token and get user
+    const { data: { user }, error: userError } = await supabase.auth.getUser(token);
+    
+    if (userError || !user) {
+      res.write(`data: ${JSON.stringify({ error: 'Invalid or expired token' })}\n\n`);
+      res.end();
+      return;
+    }
+    
+    // Get user profile to check role
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .single();
+    
+    // Check if user has access to Advanced Mode
+    const hasAccess = await hasAdvancedModeAccess(user.id, profile?.role || 'customer');
+    
+    if (!hasAccess) {
+      res.write(`data: ${JSON.stringify({ error: 'Subscription required. Please upgrade to access Advanced Mode.' })}\n\n`);
+      res.end();
+      return;
+    }
+    
     const { conversation } = req.body;
 
     // Validate input
@@ -1828,7 +1911,7 @@ app.post('/api/auth/login', async (req, res) => {
       .eq('id', authData.user.id)
       .single();
     
-    // Return user info and access token
+    // Return user info, access token, and refresh token for persistent sessions
     res.json({
       user: {
         id: authData.user.id,
@@ -1836,6 +1919,7 @@ app.post('/api/auth/login', async (req, res) => {
         role: profile?.role || 'customer'
       },
       access_token: authData.session.access_token,
+      refresh_token: authData.session.refresh_token,
       expires_at: authData.session.expires_at
     });
     
@@ -1884,6 +1968,316 @@ app.get('/api/auth/me', async (req, res) => {
   } catch (error) {
     console.error('Get user error:', error);
     res.status(500).json({ error: 'Failed to get user info' });
+  }
+});
+
+// Refresh token endpoint - allows users to get a new access token without re-logging in
+app.post('/api/auth/refresh', async (req, res) => {
+  try {
+    const { refresh_token } = req.body;
+    
+    if (!refresh_token) {
+      return res.status(400).json({ error: 'Refresh token is required' });
+    }
+    
+    if (!supabase) {
+      return res.status(500).json({ error: 'Supabase not configured' });
+    }
+    
+    // Use refresh token to get a new session
+    const { data: authData, error: authError } = await supabase.auth.refreshSession({
+      refresh_token: refresh_token
+    });
+    
+    if (authError || !authData.session) {
+      return res.status(401).json({ error: 'Invalid or expired refresh token' });
+    }
+    
+    // Get user profile with role
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', authData.user.id)
+      .single();
+    
+    // Return new tokens
+    res.json({
+      user: {
+        id: authData.user.id,
+        email: authData.user.email,
+        role: profile?.role || 'customer'
+      },
+      access_token: authData.session.access_token,
+      refresh_token: authData.session.refresh_token,
+      expires_at: authData.session.expires_at
+    });
+    
+  } catch (error) {
+    console.error('Refresh token error:', error);
+    res.status(500).json({ error: 'Failed to refresh token' });
+  }
+});
+
+// Helper function: Check if user has access to Advanced Mode
+// Internal users always have access, customers need active subscription
+async function hasAdvancedModeAccess(userId, userRole) {
+  // Internal users always have access
+  if (userRole === 'internal') {
+    return true;
+  }
+  
+  // For customers, check subscription status
+  if (!supabase) {
+    return false;
+  }
+  
+  try {
+    const { data: profile, error } = await supabase
+      .from('profiles')
+      .select('subscription_status, subscription_id')
+      .eq('id', userId)
+      .single();
+    
+    if (error || !profile) {
+      return false;
+    }
+    
+    // Check if subscription is active
+    return profile.subscription_status === 'active';
+  } catch (error) {
+    console.error('Error checking subscription:', error);
+    return false;
+  }
+}
+
+// ============================================
+// STRIPE SUBSCRIPTION ENDPOINTS
+// ============================================
+
+// Get subscription status endpoint
+app.get('/api/subscription/status', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+    
+    const token = authHeader.substring(7);
+    
+    if (!supabase) {
+      return res.status(500).json({ error: 'Supabase not configured' });
+    }
+    
+    // Verify token and get user
+    const { data: { user }, error: userError } = await supabase.auth.getUser(token);
+    
+    if (userError || !user) {
+      return res.status(401).json({ error: 'Invalid or expired token' });
+    }
+    
+    // Get profile with subscription info
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('role, subscription_status, subscription_id')
+      .eq('id', user.id)
+      .single();
+    
+    // Internal users always have access
+    const hasAccess = profile?.role === 'internal' || profile?.subscription_status === 'active';
+    
+    res.json({
+      hasAccess,
+      role: profile?.role || 'customer',
+      subscriptionStatus: profile?.subscription_status || null,
+      subscriptionId: profile?.subscription_id || null
+    });
+    
+  } catch (error) {
+    console.error('Get subscription status error:', error);
+    res.status(500).json({ error: 'Failed to get subscription status' });
+  }
+});
+
+// Create Stripe Checkout Session endpoint
+app.post('/api/stripe/create-checkout-session', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+    
+    const token = authHeader.substring(7);
+    
+    if (!supabase) {
+      return res.status(500).json({ error: 'Supabase not configured' });
+    }
+    
+    if (!process.env.STRIPE_SECRET_KEY) {
+      return res.status(500).json({ error: 'Stripe not configured' });
+    }
+    
+    // Verify token and get user
+    const { data: { user }, error: userError } = await supabase.auth.getUser(token);
+    
+    if (userError || !user) {
+      return res.status(401).json({ error: 'Invalid or expired token' });
+    }
+    
+    // Get user profile
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('email, role')
+      .eq('id', user.id)
+      .single();
+    
+    // Internal users don't need to pay
+    if (profile?.role === 'internal') {
+      return res.status(400).json({ error: 'Internal users already have access' });
+    }
+    
+    // Get product ID or price ID from environment
+    // If product ID is provided, we'll fetch its default price
+    const productId = process.env.STRIPE_PRODUCT_ID;
+    const priceId = process.env.STRIPE_PRICE_ID;
+    
+    if (!productId && !priceId) {
+      return res.status(500).json({ error: 'Stripe product ID or price ID must be configured' });
+    }
+    
+    // Get the base URL (for redirect URLs)
+    const baseUrl = process.env.BASE_URL || req.protocol + '://' + req.get('host');
+    
+    // If we have a product ID but no price ID, fetch the product's default price
+    let finalPriceId = priceId;
+    
+    if (productId && !priceId) {
+      try {
+        const product = await stripe.products.retrieve(productId);
+        // Get the default price ID from the product
+        // default_price can be a string (price ID) or a Price object
+        if (typeof product.default_price === 'string') {
+          finalPriceId = product.default_price;
+        } else if (product.default_price?.id) {
+          finalPriceId = product.default_price.id;
+        } else {
+          // If no default price, get the first active price
+          const prices = await stripe.prices.list({ 
+            product: productId, 
+            active: true,
+            limit: 1 
+          });
+          if (prices.data.length > 0) {
+            finalPriceId = prices.data[0].id;
+          } else {
+            return res.status(500).json({ error: 'Product has no active prices configured. Please add a price to your product in Stripe.' });
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching product from Stripe:', error);
+        return res.status(500).json({ error: `Failed to fetch product from Stripe: ${error.message}` });
+      }
+    }
+    
+    // Create Stripe Checkout Session
+    const session = await stripe.checkout.sessions.create({
+      customer_email: profile?.email || user.email,
+      payment_method_types: ['card'],
+      line_items: [
+        {
+          price: finalPriceId,
+          quantity: 1,
+        },
+      ],
+      mode: 'subscription',
+      success_url: `${baseUrl}/?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${baseUrl}/?canceled=true`,
+      metadata: {
+        userId: user.id,
+      },
+    });
+    
+    res.json({ sessionId: session.id, url: session.url });
+    
+  } catch (error) {
+    console.error('Create checkout session error:', error);
+    res.status(500).json({ error: 'Failed to create checkout session' });
+  }
+});
+
+// Stripe Webhook endpoint (for handling subscription events)
+// This endpoint should be called by Stripe when subscription events occur
+app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
+  const sig = req.headers['stripe-signature'];
+  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+  
+  if (!webhookSecret) {
+    console.error('Stripe webhook secret not configured');
+    return res.status(400).send('Webhook secret not configured');
+  }
+  
+  let event;
+  
+  try {
+    event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
+  } catch (err) {
+    console.error('Webhook signature verification failed:', err.message);
+    return res.status(400).send(`Webhook Error: ${err.message}`);
+  }
+  
+  // Handle the event
+  try {
+    if (event.type === 'checkout.session.completed') {
+      const session = event.data.object;
+      const userId = session.metadata?.userId;
+      
+      if (userId && supabase) {
+        // Get subscription details
+        const subscriptionId = session.subscription;
+        
+        // Update user profile with subscription info
+        await supabase
+          .from('profiles')
+          .update({
+            subscription_status: 'active',
+            subscription_id: subscriptionId,
+            subscription_started_at: new Date().toISOString()
+          })
+          .eq('id', userId);
+        
+        console.log(`Subscription activated for user: ${userId}`);
+      }
+    } else if (event.type === 'customer.subscription.updated' || event.type === 'customer.subscription.deleted') {
+      const subscription = event.data.object;
+      
+      if (supabase) {
+        // Find user by subscription ID
+        const { data: profiles } = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('subscription_id', subscription.id)
+          .limit(1);
+        
+        if (profiles && profiles.length > 0) {
+          const userId = profiles[0].id;
+          const status = subscription.status === 'active' ? 'active' : 'inactive';
+          
+          await supabase
+            .from('profiles')
+            .update({
+              subscription_status: status,
+              subscription_updated_at: new Date().toISOString()
+            })
+            .eq('id', userId);
+          
+          console.log(`Subscription ${status} for user: ${userId}`);
+        }
+      }
+    }
+    
+    res.json({ received: true });
+  } catch (error) {
+    console.error('Webhook handler error:', error);
+    res.status(500).json({ error: 'Webhook handler failed' });
   }
 });
 

@@ -27,11 +27,15 @@ sb_secret_dMPhXGIhKA357bujnYemPQ_t1LM27lC
 Run these SQL commands in your Supabase SQL Editor (Dashboard → SQL Editor):
 
 ```sql
--- Create profiles table for user roles
+-- Create profiles table for user roles and subscriptions
 CREATE TABLE IF NOT EXISTS profiles (
   id UUID REFERENCES auth.users(id) ON DELETE CASCADE PRIMARY KEY,
   email TEXT,
   role TEXT DEFAULT 'customer' CHECK (role IN ('customer', 'internal')),
+  subscription_status TEXT DEFAULT 'inactive' CHECK (subscription_status IN ('active', 'inactive', 'canceled')),
+  subscription_id TEXT,
+  subscription_started_at TIMESTAMP WITH TIME ZONE,
+  subscription_updated_at TIMESTAMP WITH TIME ZONE,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -84,16 +88,46 @@ CREATE POLICY "Service role full access" ON saved_scopes
 -- Create indexes for faster queries
 CREATE INDEX IF NOT EXISTS saved_scopes_user_id_idx ON saved_scopes(user_id);
 CREATE INDEX IF NOT EXISTS saved_scopes_created_at_idx ON saved_scopes(created_at);
+CREATE INDEX IF NOT EXISTS profiles_subscription_status_idx ON profiles(subscription_status);
+CREATE INDEX IF NOT EXISTS profiles_subscription_id_idx ON profiles(subscription_id);
+```
+
+**If you already have the profiles table, run this migration to add subscription fields:**
+
+```sql
+-- Add subscription fields to existing profiles table
+ALTER TABLE profiles 
+ADD COLUMN IF NOT EXISTS subscription_status TEXT DEFAULT 'inactive' CHECK (subscription_status IN ('active', 'inactive', 'canceled')),
+ADD COLUMN IF NOT EXISTS subscription_id TEXT,
+ADD COLUMN IF NOT EXISTS subscription_started_at TIMESTAMP WITH TIME ZONE,
+ADD COLUMN IF NOT EXISTS subscription_updated_at TIMESTAMP WITH TIME ZONE;
+
+-- Create indexes for subscription queries
+CREATE INDEX IF NOT EXISTS profiles_subscription_status_idx ON profiles(subscription_status);
+CREATE INDEX IF NOT EXISTS profiles_subscription_id_idx ON profiles(subscription_id);
 ```
 
 ## Step 2: Set Environment Variables in Railway
 
 Add these to your Railway environment variables:
 
+**Required:**
 ```
 SUPABASE_URL=https://dknnmknfegjwgfvqmndf.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=sb_secret_dMPhXGIhKA357bujnYemPQ_t1LM27lC
 ```
+
+**For Stripe (Advanced Mode Paywall):**
+```
+STRIPE_SECRET_KEY=sk_test_... (or sk_live_... for production)
+STRIPE_PRODUCT_ID=prod_... (your subscription product ID - preferred)
+OR
+STRIPE_PRICE_ID=price_... (your subscription price ID - alternative)
+STRIPE_WEBHOOK_SECRET=whsec_... (your webhook signing secret)
+BASE_URL=https://your-domain.com (for Stripe redirect URLs and webhooks)
+```
+
+**Note:** You can use either `STRIPE_PRODUCT_ID` or `STRIPE_PRICE_ID`. If you use Product ID, the system will automatically use the product's default price.
 
 **Important:** 
 - Copy these EXACTLY as shown above
@@ -117,7 +151,7 @@ WHERE email = 'your-email@example.com';
 ### Option B: Via Signup API with role
 When calling `/api/auth/signup`, include `role: 'internal'` in the request body (though the backend will default to 'customer' for security - you'll need to update it in the database).
 
-## Step 4: Test the Setup
+## Step 5: Test the Setup
 
 1. **Test Signup:**
    - Click "Login" → "Sign Up" tab

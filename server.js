@@ -94,12 +94,14 @@ app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async
       console.log('Subscription updated/deleted');
       console.log('Subscription ID:', subscription.id);
       console.log('Subscription status:', subscription.status);
+      console.log('Customer ID:', subscription.customer);
+      console.log('Full subscription object:', JSON.stringify(subscription, null, 2));
       
       if (supabase) {
-        // Find user by subscription ID
+        // First, try to find user by subscription ID
         const { data: profiles, error: findError } = await supabase
           .from('profiles')
-          .select('id')
+          .select('id, email')
           .eq('subscription_id', subscription.id)
           .limit(1);
         
@@ -108,6 +110,8 @@ app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async
         } else if (profiles && profiles.length > 0) {
           const userId = profiles[0].id;
           const status = subscription.status === 'active' ? 'active' : 'inactive';
+          
+          console.log(`Found user by subscription ID: ${userId}`);
           
           const { data: updateData, error: updateError } = await supabase
             .from('profiles')
@@ -126,6 +130,58 @@ app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async
           }
         } else {
           console.warn('⚠️ No user found with subscription ID:', subscription.id);
+          console.log('Attempting to find user by customer email...');
+          
+          // Fallback: Try to find user by customer email from Stripe
+          // We need to get the customer object from Stripe to get the email
+          try {
+            if (subscription.customer) {
+              const customer = await stripe.customers.retrieve(subscription.customer);
+              const customerEmail = customer.email;
+              
+              console.log('Customer email from Stripe:', customerEmail);
+              
+              if (customerEmail) {
+                // Find user by email
+                const { data: emailProfiles, error: emailError } = await supabase
+                  .from('profiles')
+                  .select('id, email')
+                  .eq('email', customerEmail)
+                  .limit(1);
+                
+                if (emailError) {
+                  console.error('❌ Error finding user by email:', emailError);
+                } else if (emailProfiles && emailProfiles.length > 0) {
+                  const userId = emailProfiles[0].id;
+                  const status = subscription.status === 'active' ? 'active' : 'inactive';
+                  
+                  console.log(`Found user by email: ${userId}`);
+                  
+                  // Update with subscription ID and status
+                  const { data: updateData, error: updateError } = await supabase
+                    .from('profiles')
+                    .update({
+                      subscription_status: status,
+                      subscription_id: subscription.id,
+                      subscription_updated_at: new Date().toISOString()
+                    })
+                    .eq('id', userId)
+                    .select();
+                  
+                  if (updateError) {
+                    console.error('❌ Error updating subscription status:', updateError);
+                  } else {
+                    console.log(`✅ Subscription ${status} for user: ${userId} (found by email)`);
+                    console.log('Updated profile:', updateData);
+                  }
+                } else {
+                  console.warn('⚠️ No user found with email:', customerEmail);
+                }
+              }
+            }
+          } catch (stripeError) {
+            console.error('❌ Error retrieving customer from Stripe:', stripeError);
+          }
         }
       } else {
         console.warn('⚠️ Supabase not configured');
@@ -2457,6 +2513,11 @@ app.post('/api/stripe/create-checkout-session', async (req, res) => {
     }
     
     // Create Stripe Checkout Session
+    console.log('Creating Stripe Checkout Session...');
+    console.log('User ID:', user.id);
+    console.log('User email:', profile?.email || user.email);
+    console.log('Price ID:', finalPriceId);
+    
     const session = await stripe.checkout.sessions.create({
       customer_email: profile?.email || user.email,
       payment_method_types: ['card'],
@@ -2474,6 +2535,11 @@ app.post('/api/stripe/create-checkout-session', async (req, res) => {
       },
     });
     
+    console.log('✅ Checkout session created');
+    console.log('Session ID:', session.id);
+    console.log('Session URL:', session.url);
+    console.log('Session metadata:', session.metadata);
+
     res.json({ sessionId: session.id, url: session.url });
     
   } catch (error) {

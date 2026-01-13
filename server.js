@@ -2174,6 +2174,12 @@ app.post('/api/stripe/create-checkout-session', async (req, res) => {
         }
       } catch (error) {
         console.error('Error fetching product from Stripe:', error);
+        // Provide more helpful error message
+        if (error.code === 'resource_missing') {
+          return res.status(500).json({ 
+            error: `Product ID "${productId}" not found in Stripe. Please check that you're using the correct product ID for your Stripe mode (test/live). The product might be in test mode while you're using live keys, or vice versa.` 
+          });
+        }
         return res.status(500).json({ error: `Failed to fetch product from Stripe: ${error.message}` });
       }
     }

@@ -14,6 +14,87 @@ const PORT = process.env.PORT || 3000;
 
 // Middleware
 app.use(cors());
+
+// IMPORTANT: Stripe webhook must be BEFORE express.json() middleware
+// because Stripe needs the raw body for signature verification
+// Stripe Webhook endpoint (for handling subscription events)
+// This endpoint should be called by Stripe when subscription events occur
+app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
+  const sig = req.headers['stripe-signature'];
+  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+  
+  if (!webhookSecret) {
+    console.error('Stripe webhook secret not configured');
+    return res.status(400).send('Webhook secret not configured');
+  }
+  
+  let event;
+  
+  try {
+    event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
+  } catch (err) {
+    console.error('Webhook signature verification failed:', err.message);
+    return res.status(400).send(`Webhook Error: ${err.message}`);
+  }
+  
+  // Handle the event
+  try {
+    if (event.type === 'checkout.session.completed') {
+      const session = event.data.object;
+      const userId = session.metadata?.userId;
+      
+      if (userId && supabase) {
+        // Get subscription details
+        const subscriptionId = session.subscription;
+        
+        // Update user profile with subscription info
+        await supabase
+          .from('profiles')
+          .update({
+            subscription_status: 'active',
+            subscription_id: subscriptionId,
+            subscription_started_at: new Date().toISOString()
+          })
+          .eq('id', userId);
+        
+        console.log(`Subscription activated for user: ${userId}`);
+      }
+    } else if (event.type === 'customer.subscription.updated' || event.type === 'customer.subscription.deleted') {
+      const subscription = event.data.object;
+      
+      if (supabase) {
+        // Find user by subscription ID
+        const { data: profiles } = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('subscription_id', subscription.id)
+          .limit(1);
+        
+        if (profiles && profiles.length > 0) {
+          const userId = profiles[0].id;
+          const status = subscription.status === 'active' ? 'active' : 'inactive';
+          
+          await supabase
+            .from('profiles')
+            .update({
+              subscription_status: status,
+              subscription_updated_at: new Date().toISOString()
+            })
+            .eq('id', userId);
+          
+          console.log(`Subscription ${status} for user: ${userId}`);
+        }
+      }
+    }
+    
+    res.json({ received: true });
+  } catch (error) {
+    console.error('Webhook handler error:', error);
+    res.status(500).json({ error: 'Webhook handler failed' });
+  }
+});
+
+// Now apply JSON parsing middleware for all other routes
 app.use(express.json());
 
 // Note: API routes are defined below, before static file serving
@@ -2207,83 +2288,6 @@ app.post('/api/stripe/create-checkout-session', async (req, res) => {
   } catch (error) {
     console.error('Create checkout session error:', error);
     res.status(500).json({ error: 'Failed to create checkout session' });
-  }
-});
-
-// Stripe Webhook endpoint (for handling subscription events)
-// This endpoint should be called by Stripe when subscription events occur
-app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
-  const sig = req.headers['stripe-signature'];
-  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
-  
-  if (!webhookSecret) {
-    console.error('Stripe webhook secret not configured');
-    return res.status(400).send('Webhook secret not configured');
-  }
-  
-  let event;
-  
-  try {
-    event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
-  } catch (err) {
-    console.error('Webhook signature verification failed:', err.message);
-    return res.status(400).send(`Webhook Error: ${err.message}`);
-  }
-  
-  // Handle the event
-  try {
-    if (event.type === 'checkout.session.completed') {
-      const session = event.data.object;
-      const userId = session.metadata?.userId;
-      
-      if (userId && supabase) {
-        // Get subscription details
-        const subscriptionId = session.subscription;
-        
-        // Update user profile with subscription info
-        await supabase
-          .from('profiles')
-          .update({
-            subscription_status: 'active',
-            subscription_id: subscriptionId,
-            subscription_started_at: new Date().toISOString()
-          })
-          .eq('id', userId);
-        
-        console.log(`Subscription activated for user: ${userId}`);
-      }
-    } else if (event.type === 'customer.subscription.updated' || event.type === 'customer.subscription.deleted') {
-      const subscription = event.data.object;
-      
-      if (supabase) {
-        // Find user by subscription ID
-        const { data: profiles } = await supabase
-          .from('profiles')
-          .select('id')
-          .eq('subscription_id', subscription.id)
-          .limit(1);
-        
-        if (profiles && profiles.length > 0) {
-          const userId = profiles[0].id;
-          const status = subscription.status === 'active' ? 'active' : 'inactive';
-          
-          await supabase
-            .from('profiles')
-            .update({
-              subscription_status: status,
-              subscription_updated_at: new Date().toISOString()
-            })
-            .eq('id', userId);
-          
-          console.log(`Subscription ${status} for user: ${userId}`);
-        }
-      }
-    }
-    
-    res.json({ received: true });
-  } catch (error) {
-    console.error('Webhook handler error:', error);
-    res.status(500).json({ error: 'Webhook handler failed' });
   }
 });
 

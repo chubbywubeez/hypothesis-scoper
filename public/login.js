@@ -148,6 +148,12 @@ async function handleSignup() {
     const termsCheckbox = document.getElementById('terms-checkbox');
     const newsletterCheckbox = document.getElementById('newsletter-checkbox');
     
+    console.log('=== FRONTEND SIGNUP START ===');
+    console.log('Email:', email);
+    console.log('Password length:', password.length);
+    console.log('Terms checkbox:', termsCheckbox ? termsCheckbox.checked : 'not found');
+    console.log('Newsletter checkbox:', newsletterCheckbox ? newsletterCheckbox.checked : 'not found');
+    
     if (!email || !password) {
         showAuthStatus('Please enter both email and password', 'error');
         return;
@@ -167,37 +173,53 @@ async function handleSignup() {
     authSubmitBtn.textContent = 'Signing up...';
     hideAuthStatus();
     
+    // Prepare request body
+    const requestBody = { 
+        email, 
+        password, 
+        role: 'customer',
+        terms_accepted: true,
+        terms_accepted_at: new Date().toISOString(),
+        newsletter_subscribed: newsletterCheckbox ? newsletterCheckbox.checked : false
+    };
+    
+    console.log('=== FRONTEND REQUEST BODY ===');
+    console.log(JSON.stringify(requestBody, null, 2));
+    
     try {
+        console.log('Sending signup request to /api/auth/signup...');
         const response = await fetch('/api/auth/signup', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json'
             },
-            body: JSON.stringify({ 
-                email, 
-                password, 
-                role: 'customer',
-                terms_accepted: true,
-                terms_accepted_at: new Date().toISOString(),
-                newsletter_subscribed: newsletterCheckbox ? newsletterCheckbox.checked : false
-            })
+            body: JSON.stringify(requestBody)
         });
         
+        console.log('Response status:', response.status);
+        console.log('Response ok:', response.ok);
+        
         const data = await response.json();
+        console.log('=== FRONTEND RESPONSE DATA ===');
+        console.log(JSON.stringify(data, null, 2));
         
         if (!response.ok) {
+            console.error('Signup failed with error:', data.error);
             throw new Error(data.error || 'Signup failed');
         }
         
+        console.log('✅ Signup successful, attempting auto-login...');
         // After signup, automatically login
         await handleLogin();
         
     } catch (error) {
-        console.error('Signup error:', error);
+        console.error('❌ Signup error:', error);
+        console.error('Error details:', error.message);
         showAuthStatus(error.message || 'Signup failed. Please try again.', 'error');
     } finally {
         authSubmitBtn.disabled = false;
         authSubmitBtn.textContent = isLoginMode ? 'Login' : 'Sign Up';
+        console.log('=== FRONTEND SIGNUP END ===');
     }
 }
 

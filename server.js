@@ -20,78 +20,137 @@ app.use(cors());
 // Stripe Webhook endpoint (for handling subscription events)
 // This endpoint should be called by Stripe when subscription events occur
 app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async (req, res) => {
+  console.log('=== STRIPE WEBHOOK RECEIVED ===');
+  console.log('Timestamp:', new Date().toISOString());
+  console.log('Headers:', JSON.stringify(req.headers, null, 2));
+  
   const sig = req.headers['stripe-signature'];
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
   
   if (!webhookSecret) {
-    console.error('Stripe webhook secret not configured');
+    console.error('❌ Stripe webhook secret not configured');
     return res.status(400).send('Webhook secret not configured');
   }
+  
+  console.log('Webhook secret configured:', webhookSecret ? 'Yes' : 'No');
+  console.log('Signature header present:', sig ? 'Yes' : 'No');
   
   let event;
   
   try {
     event = stripe.webhooks.constructEvent(req.body, sig, webhookSecret);
+    console.log('✅ Webhook signature verified');
+    console.log('Event type:', event.type);
+    console.log('Event ID:', event.id);
   } catch (err) {
-    console.error('Webhook signature verification failed:', err.message);
+    console.error('❌ Webhook signature verification failed:', err.message);
+    console.error('Error details:', err);
     return res.status(400).send(`Webhook Error: ${err.message}`);
   }
   
   // Handle the event
   try {
+    console.log('Processing event type:', event.type);
+    
     if (event.type === 'checkout.session.completed') {
       const session = event.data.object;
       const userId = session.metadata?.userId;
+      
+      console.log('Checkout session completed');
+      console.log('Session ID:', session.id);
+      console.log('User ID from metadata:', userId);
+      console.log('Subscription ID:', session.subscription);
+      console.log('Customer email:', session.customer_email);
       
       if (userId && supabase) {
         // Get subscription details
         const subscriptionId = session.subscription;
         
         // Update user profile with subscription info
-        await supabase
+        const { data, error } = await supabase
           .from('profiles')
           .update({
             subscription_status: 'active',
             subscription_id: subscriptionId,
             subscription_started_at: new Date().toISOString()
           })
-          .eq('id', userId);
+          .eq('id', userId)
+          .select();
         
-        console.log(`Subscription activated for user: ${userId}`);
+        if (error) {
+          console.error('❌ Error updating profile:', error);
+        } else {
+          console.log(`✅ Subscription activated for user: ${userId}`);
+          console.log('Updated profile:', data);
+        }
+      } else {
+        console.warn('⚠️ Missing userId or supabase not configured');
+        console.warn('userId:', userId);
+        console.warn('supabase configured:', !!supabase);
       }
     } else if (event.type === 'customer.subscription.updated' || event.type === 'customer.subscription.deleted') {
       const subscription = event.data.object;
       
+      console.log('Subscription updated/deleted');
+      console.log('Subscription ID:', subscription.id);
+      console.log('Subscription status:', subscription.status);
+      
       if (supabase) {
         // Find user by subscription ID
-        const { data: profiles } = await supabase
+        const { data: profiles, error: findError } = await supabase
           .from('profiles')
           .select('id')
           .eq('subscription_id', subscription.id)
           .limit(1);
         
-        if (profiles && profiles.length > 0) {
+        if (findError) {
+          console.error('❌ Error finding user by subscription ID:', findError);
+        } else if (profiles && profiles.length > 0) {
           const userId = profiles[0].id;
           const status = subscription.status === 'active' ? 'active' : 'inactive';
           
-          await supabase
+          const { data: updateData, error: updateError } = await supabase
             .from('profiles')
             .update({
               subscription_status: status,
               subscription_updated_at: new Date().toISOString()
             })
-            .eq('id', userId);
+            .eq('id', userId)
+            .select();
           
-          console.log(`Subscription ${status} for user: ${userId}`);
+          if (updateError) {
+            console.error('❌ Error updating subscription status:', updateError);
+          } else {
+            console.log(`✅ Subscription ${status} for user: ${userId}`);
+            console.log('Updated profile:', updateData);
+          }
+        } else {
+          console.warn('⚠️ No user found with subscription ID:', subscription.id);
         }
+      } else {
+        console.warn('⚠️ Supabase not configured');
       }
+    } else {
+      console.log('Unhandled event type:', event.type);
     }
     
+    console.log('=== WEBHOOK PROCESSING COMPLETE ===');
     res.json({ received: true });
   } catch (error) {
-    console.error('Webhook handler error:', error);
+    console.error('❌ Webhook handler error:', error);
+    console.error('Error stack:', error.stack);
     res.status(500).json({ error: 'Webhook handler failed' });
   }
+});
+
+// Test endpoint to verify webhook URL is accessible
+app.get('/api/stripe/webhook', (req, res) => {
+  res.status(200).json({ 
+    message: 'Webhook endpoint is accessible',
+    endpoint: '/api/stripe/webhook',
+    method: 'POST',
+    note: 'This endpoint only accepts POST requests from Stripe. Use POST method for webhooks.'
+  });
 });
 
 // Now apply JSON parsing middleware for all other routes
@@ -548,6 +607,19 @@ app.post('/api/generate-hypothesis', async (req, res) => {
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
 
+    // Get user ID from auth header if available (for tracking)
+    let userId = null;
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.substring(7);
+      try {
+        const { data: { user } } = await supabase?.auth.getUser(token) || { data: { user: null } };
+        userId = user?.id || null;
+      } catch (e) {
+        // Ignore auth errors for tracking
+      }
+    }
+
     // Call OpenAI API with streaming
     const stream = await openai.chat.completions.create({
       model: 'gpt-5.2',
@@ -562,13 +634,22 @@ app.post('/api/generate-hypothesis', async (req, res) => {
       stream: true
     });
 
-    // Stream the response
+    // Stream the response and collect for tracking
+    let fullResponse = '';
     for await (const chunk of stream) {
       const content = chunk.choices[0]?.delta?.content || '';
       if (content) {
+        fullResponse += content;
         // Send chunk as SSE
         res.write(`data: ${JSON.stringify({ content })}\n\n`);
       }
+    }
+
+    // Track generation (after streaming completes)
+    if (userId) {
+      // Estimate tokens: ~4 characters per token
+      const estimatedTokens = Math.ceil((fullPrompt.length + fullResponse.length) / 4);
+      await trackGeneration(userId, 'hypothesis', estimatedTokens, fullPrompt.length, fullResponse.length);
     }
 
     // Send completion signal
@@ -605,6 +686,19 @@ app.post('/api/generate-scope', async (req, res) => {
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
 
+    // Get user ID from auth header if available (for tracking)
+    let userId = null;
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.substring(7);
+      try {
+        const { data: { user } } = await supabase?.auth.getUser(token) || { data: { user: null } };
+        userId = user?.id || null;
+      } catch (e) {
+        // Ignore auth errors for tracking
+      }
+    }
+
     // Call OpenAI API with streaming
     const stream = await openai.chat.completions.create({
       model: 'gpt-4o',
@@ -619,12 +713,21 @@ app.post('/api/generate-scope', async (req, res) => {
       stream: true
     });
 
-    // Stream the response
+    // Stream the response and collect for tracking
+    let fullResponse = '';
     for await (const chunk of stream) {
       const content = chunk.choices[0]?.delta?.content || '';
       if (content) {
+        fullResponse += content;
         res.write(`data: ${JSON.stringify({ content })}\n\n`);
       }
+    }
+
+    // Track generation (after streaming completes)
+    if (userId) {
+      // Estimate tokens: ~4 characters per token
+      const estimatedTokens = Math.ceil((fullPrompt.length + fullResponse.length) / 4);
+      await trackGeneration(userId, 'scope', estimatedTokens, fullPrompt.length, fullResponse.length);
     }
 
     // Send completion signal
@@ -705,6 +808,19 @@ Here is the idea:
     // Replace placeholder with actual idea
     const fullPrompt = QUICK_SCOPE_PROMPT.replace('{INPUT_PLACEHOLDER}', idea.trim());
 
+    // Get user ID from auth header if available (for tracking)
+    let userId = null;
+    const authHeader = req.headers.authorization;
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.substring(7);
+      try {
+        const { data: { user } } = await supabase?.auth.getUser(token) || { data: { user: null } };
+        userId = user?.id || null;
+      } catch (e) {
+        // Ignore auth errors for tracking
+      }
+    }
+
     // Call OpenAI API with streaming
     const stream = await openai.chat.completions.create({
       model: 'gpt-5.2',
@@ -719,13 +835,22 @@ Here is the idea:
       stream: true
     });
 
-    // Stream the response
+    // Stream the response and collect for tracking
+    let buffer = '';
     for await (const chunk of stream) {
       const content = chunk.choices[0]?.delta?.content || '';
       if (content) {
+        buffer += content;
         // Send chunk as SSE
         res.write(`data: ${JSON.stringify({ content })}\n\n`);
       }
+    }
+
+    // Track generation (after streaming completes)
+    if (userId) {
+      // Estimate tokens: ~4 characters per token
+      const estimatedTokens = Math.ceil((fullPrompt.length + buffer.length) / 4);
+      await trackGeneration(userId, 'quick_scope', estimatedTokens, fullPrompt.length, buffer.length);
     }
 
     // Send completion signal
@@ -990,13 +1115,24 @@ Your goal in this conversation is to help the user refine their product idea int
       stream: true
     });
 
-    // Stream the response
+    // Stream the response and collect for tracking
+    let fullResponse = '';
     for await (const chunk of stream) {
       const content = chunk.choices[0]?.delta?.content || '';
       if (content) {
+        fullResponse += content;
         // Send chunk as SSE
         res.write(`data: ${JSON.stringify({ content })}\n\n`);
       }
+    }
+
+    // Track generation (after streaming completes)
+    // Note: We track this as 'advanced_conversation' type
+    if (user.id) {
+      // Estimate tokens: ~4 characters per token
+      const conversationText = JSON.stringify(conversation);
+      const estimatedTokens = Math.ceil((conversationText.length + fullResponse.length) / 4);
+      await trackGeneration(user.id, 'advanced_conversation', estimatedTokens, conversationText.length, fullResponse.length);
     }
 
     // Send completion signal
@@ -1258,13 +1394,22 @@ ${conversationContext}
       stream: true
     });
 
-    // Stream the response
+    // Stream the response and collect for tracking
+    let fullResponse = '';
     for await (const chunk of stream) {
       const content = chunk.choices[0]?.delta?.content || '';
       if (content) {
+        fullResponse += content;
         // Send chunk as SSE
         res.write(`data: ${JSON.stringify({ content })}\n\n`);
       }
+    }
+
+    // Track generation (after streaming completes)
+    if (user.id) {
+      // Estimate tokens: ~4 characters per token
+      const estimatedTokens = Math.ceil((fullPrompt.length + fullResponse.length) / 4);
+      await trackGeneration(user.id, 'advanced_hypothesis', estimatedTokens, fullPrompt.length, fullResponse.length);
     }
 
     // Send completion signal
@@ -1881,22 +2026,38 @@ app.post('/api/export-to-confluence', async (req, res) => {
 
 // Sign up endpoint
 app.post('/api/auth/signup', async (req, res) => {
+  console.log('=== BACKEND SIGNUP REQUEST RECEIVED ===');
+  console.log('Request body:', JSON.stringify(req.body, null, 2));
+  console.log('Request headers:', JSON.stringify(req.headers, null, 2));
+  
   try {
     const { email, password, role = 'customer', terms_accepted, newsletter_subscribed } = req.body;
     
+    console.log('Parsed request data:');
+    console.log('  Email:', email);
+    console.log('  Password present:', !!password);
+    console.log('  Password length:', password ? password.length : 0);
+    console.log('  Role:', role);
+    console.log('  Terms accepted:', terms_accepted);
+    console.log('  Newsletter subscribed:', newsletter_subscribed);
+    
     if (!email || !password) {
+      console.error('❌ Validation failed: Missing email or password');
       return res.status(400).json({ error: 'Email and password are required' });
     }
     
     // Validate terms acceptance
     if (!terms_accepted) {
+      console.error('❌ Validation failed: Terms not accepted');
       return res.status(400).json({ error: 'You must accept the Terms and Conditions and Privacy Policy to create an account' });
     }
     
     if (!supabase) {
+      console.error('❌ Supabase not configured');
       return res.status(500).json({ error: 'Supabase not configured' });
     }
     
+    console.log('Creating user in Supabase Auth...');
     // Create user in Supabase Auth
     const { data: authData, error: authError } = await supabase.auth.admin.createUser({
       email,
@@ -1905,23 +2066,41 @@ app.post('/api/auth/signup', async (req, res) => {
     });
     
     if (authError) {
+      console.error('❌ Auth user creation failed:', authError);
       return res.status(400).json({ error: authError.message });
     }
     
+    console.log('✅ Auth user created successfully');
+    console.log('  User ID:', authData.user.id);
+    console.log('  User email:', authData.user.email);
+    
     // Create profile with role and terms acceptance
-    const { error: profileError } = await supabase
+    const profileData = {
+      id: authData.user.id,
+      email: email,
+      role: role === 'internal' ? 'internal' : 'customer', // Only allow setting internal role if explicitly requested
+      terms_accepted: true,
+      terms_accepted_at: new Date().toISOString()
+    };
+    
+    console.log('Creating profile in database...');
+    console.log('Profile data:', JSON.stringify(profileData, null, 2));
+    
+    const { data: profileDataResult, error: profileError } = await supabase
       .from('profiles')
-      .insert({
-        id: authData.user.id,
-        email: email,
-        role: role === 'internal' ? 'internal' : 'customer', // Only allow setting internal role if explicitly requested
-        terms_accepted: true,
-        terms_accepted_at: new Date().toISOString()
-      });
+      .insert(profileData)
+      .select();
     
     if (profileError) {
-      console.error('Profile creation error:', profileError);
+      console.error('❌ Profile creation error:', profileError);
+      console.error('Error code:', profileError.code);
+      console.error('Error message:', profileError.message);
+      console.error('Error details:', profileError.details);
+      console.error('Error hint:', profileError.hint);
       // User created but profile failed - not ideal but continue
+    } else {
+      console.log('✅ Profile created successfully');
+      console.log('Profile data result:', JSON.stringify(profileDataResult, null, 2));
     }
     
     // Subscribe to Beehiiv newsletter if requested
@@ -1939,13 +2118,17 @@ app.post('/api/auth/signup', async (req, res) => {
     }
     
     // Generate session token
+    console.log('Generating session link...');
     const { data: sessionData, error: sessionError } = await supabase.auth.admin.generateLink({
       type: 'magiclink',
       email: email
     });
     
-    // Return user info and token
-    res.json({
+    if (sessionError) {
+      console.error('Session link generation error (non-fatal):', sessionError);
+    }
+    
+    const responseData = {
       user: {
         id: authData.user.id,
         email: authData.user.email,
@@ -1954,10 +2137,18 @@ app.post('/api/auth/signup', async (req, res) => {
       // For simplicity, we'll return a token they can use
       // In production, you might want to use Supabase's session management
       message: 'User created successfully. Please use /api/auth/login to get a token.'
-    });
+    };
+    
+    console.log('✅ Signup completed successfully');
+    console.log('Response data:', JSON.stringify(responseData, null, 2));
+    console.log('=== BACKEND SIGNUP REQUEST END ===');
+    
+    // Return user info and token
+    res.json(responseData);
     
   } catch (error) {
-    console.error('Signup error:', error);
+    console.error('❌ Signup error (catch block):', error);
+    console.error('Error stack:', error.stack);
     res.status(500).json({ error: 'Failed to create user' });
   }
 });
@@ -2288,6 +2479,300 @@ app.post('/api/stripe/create-checkout-session', async (req, res) => {
   } catch (error) {
     console.error('Create checkout session error:', error);
     res.status(500).json({ error: 'Failed to create checkout session' });
+  }
+});
+
+// ============================================
+// TRACKING HELPER FUNCTIONS
+// ============================================
+
+// Track user login event
+async function trackLogin(userId, req) {
+  if (!supabase) return;
+  
+  try {
+    await supabase
+      .from('login_events')
+      .insert({
+        user_id: userId,
+        ip_address: req.ip || req.headers['x-forwarded-for'] || req.connection.remoteAddress,
+        user_agent: req.headers['user-agent']
+      });
+  } catch (error) {
+    console.error('Error tracking login:', error);
+    // Don't fail login if tracking fails
+  }
+}
+
+// Track generation event
+async function trackGeneration(userId, generationType, tokensUsed, inputLength, outputLength) {
+  if (!supabase) return;
+  
+  try {
+    await supabase
+      .from('generation_events')
+      .insert({
+        user_id: userId,
+        generation_type: generationType,
+        tokens_used: tokensUsed || null,
+        input_length: inputLength || null,
+        output_length: outputLength || null
+      });
+  } catch (error) {
+    console.error('Error tracking generation:', error);
+    // Don't fail generation if tracking fails
+  }
+}
+
+// ============================================
+// ADMIN DASHBOARD ENDPOINTS (Internal Users Only)
+// ============================================
+
+// Get dashboard analytics (internal users only)
+app.get('/api/admin/dashboard', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+    
+    const token = authHeader.substring(7);
+    
+    if (!supabase) {
+      return res.status(500).json({ error: 'Supabase not configured' });
+    }
+    
+    // Verify token and get user
+    const { data: { user }, error: userError } = await supabase.auth.getUser(token);
+    
+    if (userError || !user) {
+      return res.status(401).json({ error: 'Invalid or expired token' });
+    }
+    
+    // Check if user is internal
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .single();
+    
+    if (profile?.role !== 'internal') {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+    
+    // Get total users
+    const { count: totalUsers } = await supabase
+      .from('profiles')
+      .select('*', { count: 'exact', head: true });
+    
+    // Get active subscriptions
+    const { count: activeSubscriptions } = await supabase
+      .from('profiles')
+      .select('*', { count: 'exact', head: true })
+      .eq('subscription_status', 'active');
+    
+    // Get total generations
+    const { count: totalGenerations } = await supabase
+      .from('generation_events')
+      .select('*', { count: 'exact', head: true });
+    
+    // Get total tokens used
+    const { data: tokenData } = await supabase
+      .from('generation_events')
+      .select('tokens_used');
+    
+    const totalTokens = tokenData?.reduce((sum, event) => sum + (event.tokens_used || 0), 0) || 0;
+    
+    // Get total logins
+    const { count: totalLogins } = await supabase
+      .from('login_events')
+      .select('*', { count: 'exact', head: true });
+    
+    // Get recent activity (last 7 days)
+    const sevenDaysAgo = new Date();
+    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
+    
+    const { data: recentGenerations } = await supabase
+      .from('generation_events')
+      .select('created_at, generation_type')
+      .gte('created_at', sevenDaysAgo.toISOString());
+    
+    const { data: recentLogins } = await supabase
+      .from('login_events')
+      .select('login_at')
+      .gte('login_at', sevenDaysAgo.toISOString());
+    
+    res.json({
+      totalUsers,
+      activeSubscriptions,
+      totalGenerations,
+      totalTokens,
+      totalLogins,
+      recentActivity: {
+        generations: recentGenerations?.length || 0,
+        logins: recentLogins?.length || 0
+      }
+    });
+    
+  } catch (error) {
+    console.error('Get dashboard analytics error:', error);
+    res.status(500).json({ error: 'Failed to get dashboard analytics' });
+  }
+});
+
+// Get all users with analytics (internal users only)
+app.get('/api/admin/users', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+    
+    const token = authHeader.substring(7);
+    
+    if (!supabase) {
+      return res.status(500).json({ error: 'Supabase not configured' });
+    }
+    
+    // Verify token and get user
+    const { data: { user }, error: userError } = await supabase.auth.getUser(token);
+    
+    if (userError || !user) {
+      return res.status(401).json({ error: 'Invalid or expired token' });
+    }
+    
+    // Check if user is internal
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .single();
+    
+    if (profile?.role !== 'internal') {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+    
+    // Get all users with their profiles
+    const { data: profiles, error: profilesError } = await supabase
+      .from('profiles')
+      .select('*')
+      .order('created_at', { ascending: false });
+    
+    if (profilesError) {
+      throw profilesError;
+    }
+    
+    // Get analytics for each user
+    const usersWithAnalytics = await Promise.all(
+      profiles.map(async (profile) => {
+        // Get login count
+        const { count: loginCount } = await supabase
+          .from('login_events')
+          .select('*', { count: 'exact', head: true })
+          .eq('user_id', profile.id);
+        
+        // Get last login
+        const { data: lastLoginData } = await supabase
+          .from('login_events')
+          .select('login_at')
+          .eq('user_id', profile.id)
+          .order('login_at', { ascending: false })
+          .limit(1)
+          .single();
+        
+        // Get generation count
+        const { count: generationCount } = await supabase
+          .from('generation_events')
+          .select('*', { count: 'exact', head: true })
+          .eq('user_id', profile.id);
+        
+        // Get total tokens used
+        const { data: tokenData } = await supabase
+          .from('generation_events')
+          .select('tokens_used')
+          .eq('user_id', profile.id);
+        
+        const totalTokens = tokenData?.reduce((sum, event) => sum + (event.tokens_used || 0), 0) || 0;
+        
+        return {
+          id: profile.id,
+          email: profile.email,
+          role: profile.role,
+          subscriptionStatus: profile.subscription_status,
+          subscriptionId: profile.subscription_id,
+          subscriptionStartedAt: profile.subscription_started_at,
+          createdAt: profile.created_at,
+          loginCount: loginCount || 0,
+          lastLogin: lastLoginData?.login_at || null,
+          generationCount: generationCount || 0,
+          totalTokens: totalTokens
+        };
+      })
+    );
+    
+    res.json({ users: usersWithAnalytics });
+    
+  } catch (error) {
+    console.error('Get users error:', error);
+    res.status(500).json({ error: 'Failed to get users' });
+  }
+});
+
+// Update user role (internal users only)
+app.patch('/api/admin/users/:userId/role', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+    
+    const token = authHeader.substring(7);
+    const { userId } = req.params;
+    const { role } = req.body;
+    
+    if (!role || !['customer', 'internal'].includes(role)) {
+      return res.status(400).json({ error: 'Invalid role. Must be "customer" or "internal"' });
+    }
+    
+    if (!supabase) {
+      return res.status(500).json({ error: 'Supabase not configured' });
+    }
+    
+    // Verify token and get user
+    const { data: { user }, error: userError } = await supabase.auth.getUser(token);
+    
+    if (userError || !user) {
+      return res.status(401).json({ error: 'Invalid or expired token' });
+    }
+    
+    // Check if user is internal
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .single();
+    
+    if (profile?.role !== 'internal') {
+      return res.status(403).json({ error: 'Admin access required' });
+    }
+    
+    // Update the user's role
+    const { data, error } = await supabase
+      .from('profiles')
+      .update({ role, updated_at: new Date().toISOString() })
+      .eq('id', userId)
+      .select()
+      .single();
+    
+    if (error) {
+      throw error;
+    }
+    
+    res.json({ success: true, user: data });
+    
+  } catch (error) {
+    console.error('Update user role error:', error);
+    res.status(500).json({ error: 'Failed to update user role' });
   }
 });
 

@@ -1947,7 +1947,20 @@ function handleLogout() {
     window.location.href = '/login.html';
 }
 
-// Auth event handlers
+// Auth event handlers - ensure DOM is ready
+document.addEventListener('DOMContentLoaded', () => {
+    if (loginBtn) {
+        loginBtn.addEventListener('click', () => {
+            window.location.href = '/login.html';
+        });
+    }
+
+    if (logoutBtn) {
+        logoutBtn.addEventListener('click', handleLogout);
+    }
+});
+
+// Also attach immediately in case DOM is already loaded
 if (loginBtn) {
     loginBtn.addEventListener('click', () => {
         window.location.href = '/login.html';

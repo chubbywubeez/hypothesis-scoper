@@ -143,6 +143,30 @@ async function checkAuthOnLoad() {
     
     // Check subscription status after auth
     await checkSubscriptionStatus();
+    
+    // Check if user just returned from Stripe checkout
+    const urlParams = new URLSearchParams(window.location.search);
+    const sessionId = urlParams.get('session_id');
+    const canceled = urlParams.get('canceled');
+    
+    if (sessionId) {
+        // User completed payment, check subscription status
+        console.log('User returned from Stripe checkout, checking subscription status...');
+        // Wait a moment for webhook to process
+        setTimeout(async () => {
+            await checkSubscriptionStatus();
+            // Remove session_id from URL
+            window.history.replaceState({}, document.title, window.location.pathname);
+            if (hasAdvancedAccess) {
+                showSuccess('Payment successful! You now have access to Advanced Mode.');
+            }
+        }, 2000); // Wait 2 seconds for webhook to process
+    } else if (canceled) {
+        // User canceled payment
+        showError('Payment was canceled.');
+        // Remove canceled parameter from URL
+        window.history.replaceState({}, document.title, window.location.pathname);
+    }
 }
 
 // Check authentication when page loads
@@ -1254,11 +1278,14 @@ function hideError() {
     errorMessage.style.display = 'none';
 }
 
-function showSuccess() {
-    successNotification.style.display = 'block';
-    setTimeout(() => {
-        successNotification.style.display = 'none';
-    }, 2000);
+function showSuccess(message) {
+    if (successNotification) {
+        successNotification.textContent = message || 'Success!';
+        successNotification.style.display = 'block';
+        setTimeout(() => {
+            successNotification.style.display = 'none';
+        }, 3000);
+    }
 }
 
 // Allow Enter key to submit (Ctrl/Cmd + Enter for newline)
@@ -1875,6 +1902,12 @@ function updateUIForAuth() {
         }
         if (myScopesBtn) myScopesBtn.style.display = 'inline-block';
         
+        // Show Admin Dashboard button for internal users
+        const adminDashboardBtn = document.getElementById('admin-dashboard-btn');
+        if (adminDashboardBtn) {
+            adminDashboardBtn.style.display = userRole === 'internal' ? 'inline-block' : 'none';
+        }
+        
         // Show/hide buttons based on role
         if (userRole === 'internal') {
             // Internal users see Export to Confluence buttons
@@ -1924,6 +1957,12 @@ function updateUIForAuth() {
         if (logoutBtn) logoutBtn.style.display = 'none';
         if (userEmail) userEmail.style.display = 'none';
         if (myScopesBtn) myScopesBtn.style.display = 'none';
+        
+        // Hide admin dashboard button
+        const adminDashboardBtn = document.getElementById('admin-dashboard-btn');
+        if (adminDashboardBtn) {
+            adminDashboardBtn.style.display = 'none';
+        }
         
         // Hide all export/save buttons until logged in
         if (exportHypothesisConfluenceBtn) exportHypothesisConfluenceBtn.style.display = 'none';

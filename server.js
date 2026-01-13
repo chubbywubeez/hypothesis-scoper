@@ -2153,10 +2153,23 @@ app.post('/api/auth/signup', async (req, res) => {
       console.error('Error message:', profileError.message);
       console.error('Error details:', profileError.details);
       console.error('Error hint:', profileError.hint);
-      // User created but profile failed - not ideal but continue
+      // User created but profile failed - this is a critical error
+      // Return error response so frontend knows signup failed
+      return res.status(500).json({ 
+        error: 'Failed to create user profile. Please try again or contact support.',
+        details: profileError.message 
+      });
     } else {
       console.log('✅ Profile created successfully');
       console.log('Profile data result:', JSON.stringify(profileDataResult, null, 2));
+      
+      // Verify profile was actually created
+      if (!profileDataResult || profileDataResult.length === 0) {
+        console.error('❌ Profile creation returned no data');
+        return res.status(500).json({ 
+          error: 'Failed to create user profile. Please try again.' 
+        });
+      }
     }
     
     // Subscribe to Beehiiv newsletter if requested

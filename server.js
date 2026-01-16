@@ -2445,6 +2445,137 @@ app.get('/api/subscription/status', async (req, res) => {
   }
 });
 
+// Manual sync subscription from Stripe (for admin/internal users or webhook recovery)
+// This endpoint allows manually syncing subscription status from Stripe
+app.post('/api/subscription/sync', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+    
+    const token = authHeader.substring(7);
+    
+    if (!supabase) {
+      return res.status(500).json({ error: 'Supabase not configured' });
+    }
+    
+    if (!process.env.STRIPE_SECRET_KEY) {
+      return res.status(500).json({ error: 'Stripe not configured' });
+    }
+    
+    // Verify token and get user
+    const { data: { user }, error: userError } = await supabase.auth.getUser(token);
+    
+    if (userError || !user) {
+      return res.status(401).json({ error: 'Invalid or expired token' });
+    }
+    
+    // Get user profile
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('email, role, subscription_id')
+      .eq('id', user.id)
+      .single();
+    
+    if (!profile) {
+      return res.status(404).json({ error: 'Profile not found' });
+    }
+    
+    // Only allow internal users or users with existing subscription_id to sync
+    // This prevents abuse while allowing recovery
+    if (profile.role !== 'internal' && !profile.subscription_id) {
+      return res.status(403).json({ error: 'No subscription found to sync' });
+    }
+    
+    console.log('=== MANUAL SUBSCRIPTION SYNC ===');
+    console.log('User email:', profile.email);
+    console.log('User ID:', user.id);
+    console.log('Existing subscription_id:', profile.subscription_id);
+    
+    // Try to find subscription by email in Stripe
+    let subscription = null;
+    
+    if (profile.subscription_id) {
+      // Try to retrieve by existing subscription ID
+      try {
+        subscription = await stripe.subscriptions.retrieve(profile.subscription_id);
+        console.log('Found subscription by ID:', subscription.id);
+      } catch (err) {
+        console.warn('Could not find subscription by ID:', profile.subscription_id);
+      }
+    }
+    
+    // If not found by ID, search by customer email
+    if (!subscription) {
+      try {
+        const customers = await stripe.customers.list({
+          email: profile.email,
+          limit: 1
+        });
+        
+        if (customers.data.length > 0) {
+          const customer = customers.data[0];
+          console.log('Found customer:', customer.id);
+          
+          // Get active subscriptions for this customer
+          const subscriptions = await stripe.subscriptions.list({
+            customer: customer.id,
+            status: 'all',
+            limit: 1
+          });
+          
+          if (subscriptions.data.length > 0) {
+            subscription = subscriptions.data[0];
+            console.log('Found subscription by customer:', subscription.id);
+          }
+        }
+      } catch (err) {
+        console.error('Error searching for customer:', err);
+      }
+    }
+    
+    if (!subscription) {
+      return res.status(404).json({ error: 'No active subscription found in Stripe' });
+    }
+    
+    // Update profile with subscription info
+    const status = subscription.status === 'active' ? 'active' : 'inactive';
+    const { data: updatedProfile, error: updateError } = await supabase
+      .from('profiles')
+      .update({
+        subscription_status: status,
+        subscription_id: subscription.id,
+        subscription_started_at: subscription.created ? new Date(subscription.created * 1000).toISOString() : new Date().toISOString(),
+        subscription_updated_at: new Date().toISOString()
+      })
+      .eq('id', user.id)
+      .select();
+    
+    if (updateError) {
+      console.error('❌ Error updating profile:', updateError);
+      return res.status(500).json({ error: 'Failed to update subscription status', details: updateError.message });
+    }
+    
+    console.log('✅ Subscription synced successfully');
+    console.log('Updated profile:', updatedProfile);
+    
+    res.json({
+      success: true,
+      subscription: {
+        id: subscription.id,
+        status: subscription.status,
+        customer: subscription.customer
+      },
+      profile: updatedProfile[0]
+    });
+    
+  } catch (error) {
+    console.error('Sync subscription error:', error);
+    res.status(500).json({ error: 'Failed to sync subscription', details: error.message });
+  }
+});
+
 // Create Stripe Checkout Session endpoint
 app.post('/api/stripe/create-checkout-session', async (req, res) => {
   try {

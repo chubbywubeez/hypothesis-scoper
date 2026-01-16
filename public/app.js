@@ -150,17 +150,23 @@ async function checkAuthOnLoad() {
     const canceled = urlParams.get('canceled');
     
     if (sessionId) {
-        // User completed payment, check subscription status
-        console.log('User returned from Stripe checkout, checking subscription status...');
-        // Wait a moment for webhook to process
+        // User completed payment, sync subscription from Stripe
+        console.log('User returned from Stripe checkout, syncing subscription...');
+        // Try to sync subscription immediately (webhook may not have fired yet)
+        await syncSubscriptionFromStripe();
+        // Also check status after a delay in case webhook processes
         setTimeout(async () => {
             await checkSubscriptionStatus();
             // Remove session_id from URL
             window.history.replaceState({}, document.title, window.location.pathname);
             if (hasAdvancedAccess) {
                 showSuccess('Payment successful! You now have access to Advanced Mode.');
+            } else {
+                // If still no access, try syncing again
+                await syncSubscriptionFromStripe();
+                await checkSubscriptionStatus();
             }
-        }, 2000); // Wait 2 seconds for webhook to process
+        }, 3000); // Wait 3 seconds for webhook to process
     } else if (canceled) {
         // User canceled payment
         showError('Payment was canceled.');
@@ -1752,6 +1758,44 @@ async function checkSubscriptionStatus() {
     } catch (error) {
         console.error('Subscription check error:', error);
         hasAdvancedAccess = false;
+        return false;
+    }
+}
+
+// Sync subscription from Stripe (manual sync for webhook recovery)
+async function syncSubscriptionFromStripe() {
+    if (!authToken) {
+        return false;
+    }
+    
+    // Get valid token (refresh if needed)
+    const token = await getValidToken();
+    if (!token) {
+        return false;
+    }
+    
+    try {
+        console.log('Syncing subscription from Stripe...');
+        const response = await fetch('/api/subscription/sync', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+        
+        if (response.ok) {
+            const data = await response.json();
+            console.log('✅ Subscription synced:', data);
+            // Refresh subscription status after sync
+            await checkSubscriptionStatus();
+            return true;
+        } else {
+            const errorData = await response.json();
+            console.warn('⚠️ Subscription sync failed:', errorData.error);
+            return false;
+        }
+    } catch (error) {
+        console.error('Subscription sync error:', error);
         return false;
     }
 }

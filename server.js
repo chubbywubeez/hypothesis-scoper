@@ -69,6 +69,19 @@ app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async
         console.log('Attempting to update profile for user:', userId);
         console.log('Subscription ID:', subscriptionId);
         
+        // First, verify the user exists and we can read it
+        const { data: existingProfile, error: readError } = await supabase
+          .from('profiles')
+          .select('id, email, subscription_status')
+          .eq('id', userId)
+          .single();
+        
+        if (readError) {
+          console.error('❌ Error reading profile before update:', readError);
+        } else {
+          console.log('✅ Profile exists, can read:', existingProfile);
+        }
+        
         // Update user profile with subscription info
         const { data, error } = await supabase
           .from('profiles')

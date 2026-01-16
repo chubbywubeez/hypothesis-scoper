@@ -65,47 +65,106 @@ app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async
       if (userId && supabase) {
         // Get subscription details
         const subscriptionId = session.subscription;
+        const customerEmail = session.customer_email;
         
         console.log('Attempting to update profile for user:', userId);
         console.log('Subscription ID:', subscriptionId);
+        console.log('Customer email:', customerEmail);
         
-        // First, verify the user exists and we can read it
+        // First, check if the profile exists
         const { data: existingProfile, error: readError } = await supabase
           .from('profiles')
-          .select('id, email, subscription_status')
+          .select('id, email, subscription_status, subscription_id')
           .eq('id', userId)
-          .single();
+          .maybeSingle(); // Use maybeSingle() instead of single() to avoid error when no rows
         
-        if (readError) {
-          console.error('❌ Error reading profile before update:', readError);
-        } else {
-          console.log('✅ Profile exists, can read:', existingProfile);
+        if (readError && readError.code !== 'PGRST116') {
+          // PGRST116 is "no rows" which is expected if profile doesn't exist
+          console.error('❌ Error reading profile:', readError);
         }
         
-        // Update user profile with subscription info
-        const { data, error } = await supabase
-          .from('profiles')
-          .update({
-            subscription_status: 'active',
-            subscription_id: subscriptionId,
-            subscription_started_at: new Date().toISOString()
-          })
-          .eq('id', userId)
-          .select();
-        
-        if (error) {
-          console.error('❌ Error updating profile:', error);
-          console.error('Error code:', error.code);
-          console.error('Error message:', error.message);
-          console.error('Error details:', error.details);
-          console.error('Error hint:', error.hint);
-        } else if (!data || data.length === 0) {
-          console.error('❌ Update returned no rows - RLS policy may be blocking update');
-          console.error('User ID:', userId);
-          console.error('This likely means the RLS policy is preventing the update');
+        // If profile doesn't exist, create it first
+        if (!existingProfile) {
+          console.warn('⚠️ Profile does not exist for user:', userId);
+          console.log('Creating profile for user...');
+          
+          // Verify the user exists in auth.users first
+          try {
+            const { data: authUser, error: authError } = await supabase.auth.admin.getUserById(userId);
+            
+            if (authError) {
+              console.error('❌ User does not exist in auth.users:', authError);
+              console.error('Cannot create profile for non-existent user');
+            } else {
+              console.log('✅ User exists in auth.users:', authUser.user.email);
+              
+              // Create the profile
+              const profileData = {
+                id: userId,
+                email: customerEmail || authUser.user.email || 'unknown@example.com',
+                role: 'customer',
+                subscription_status: 'active',
+                subscription_id: subscriptionId,
+                subscription_started_at: new Date().toISOString(),
+                subscription_updated_at: new Date().toISOString(),
+                terms_accepted: true, // Assume terms accepted if they completed checkout
+                terms_accepted_at: new Date().toISOString()
+              };
+              
+              console.log('Creating profile with data:', JSON.stringify(profileData, null, 2));
+              
+              const { data: newProfile, error: createError } = await supabase
+                .from('profiles')
+                .insert(profileData)
+                .select();
+              
+              if (createError) {
+                console.error('❌ Error creating profile:', createError);
+                console.error('Error code:', createError.code);
+                console.error('Error message:', createError.message);
+                console.error('Error details:', createError.details);
+                console.error('Error hint:', createError.hint);
+              } else if (!newProfile || newProfile.length === 0) {
+                console.error('❌ Profile creation returned no rows - RLS policy may be blocking insert');
+              } else {
+                console.log(`✅ Profile created successfully for user: ${userId}`);
+                console.log('Created profile:', JSON.stringify(newProfile, null, 2));
+              }
+            }
+          } catch (authErr) {
+            console.error('❌ Error checking auth user:', authErr);
+          }
         } else {
-          console.log(`✅ Subscription activated for user: ${userId}`);
-          console.log('Updated profile:', JSON.stringify(data, null, 2));
+          // Profile exists, update it
+          console.log('✅ Profile exists, updating subscription info');
+          console.log('Current profile:', JSON.stringify(existingProfile, null, 2));
+          
+          // Update user profile with subscription info
+          const { data, error } = await supabase
+            .from('profiles')
+            .update({
+              subscription_status: 'active',
+              subscription_id: subscriptionId,
+              subscription_started_at: existingProfile.subscription_started_at || new Date().toISOString(),
+              subscription_updated_at: new Date().toISOString()
+            })
+            .eq('id', userId)
+            .select();
+          
+          if (error) {
+            console.error('❌ Error updating profile:', error);
+            console.error('Error code:', error.code);
+            console.error('Error message:', error.message);
+            console.error('Error details:', error.details);
+            console.error('Error hint:', error.hint);
+          } else if (!data || data.length === 0) {
+            console.error('❌ Update returned no rows - RLS policy may be blocking update');
+            console.error('User ID:', userId);
+            console.error('This likely means the RLS policy is preventing the update');
+          } else {
+            console.log(`✅ Subscription activated for user: ${userId}`);
+            console.log('Updated profile:', JSON.stringify(data, null, 2));
+          }
         }
       } else {
         console.warn('⚠️ Missing userId or supabase not configured');
@@ -115,27 +174,47 @@ app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async
     } else if (event.type === 'customer.subscription.updated' || event.type === 'customer.subscription.deleted') {
       const subscription = event.data.object;
       
-      console.log('Subscription updated/deleted');
+      console.log('=== SUBSCRIPTION UPDATE/DELETE EVENT ===');
       console.log('Subscription ID:', subscription.id);
       console.log('Subscription status:', subscription.status);
       console.log('Customer ID:', subscription.customer);
-      console.log('Full subscription object:', JSON.stringify(subscription, null, 2));
       
       if (supabase) {
+        console.log('✅ Supabase client available');
+        
         // First, try to find user by subscription ID
+        console.log('Step 1: Searching for user by subscription_id:', subscription.id);
         const { data: profiles, error: findError } = await supabase
           .from('profiles')
-          .select('id, email')
+          .select('id, email, subscription_id, subscription_status')
           .eq('subscription_id', subscription.id)
           .limit(1);
         
         if (findError) {
           console.error('❌ Error finding user by subscription ID:', findError);
-        } else if (profiles && profiles.length > 0) {
+          console.error('Error code:', findError.code);
+          console.error('Error message:', findError.message);
+          console.error('Error details:', findError.details);
+        } else {
+          console.log('Query result - Profiles found:', profiles ? profiles.length : 0);
+          if (profiles && profiles.length > 0) {
+            console.log('Found profiles:', JSON.stringify(profiles, null, 2));
+          }
+        }
+        
+        if (profiles && profiles.length > 0) {
           const userId = profiles[0].id;
+          const userEmail = profiles[0].email;
           const status = subscription.status === 'active' ? 'active' : 'inactive';
           
-          console.log(`Found user by subscription ID: ${userId}`);
+          console.log(`✅ Found user by subscription ID: ${userId} (${userEmail})`);
+          console.log(`Updating subscription status to: ${status}`);
+          
+          // Update subscription status
+          // Try using .update() with explicit service role context
+          console.log('Attempting UPDATE with service role...');
+          console.log('User ID to update:', userId);
+          console.log('New status:', status);
           
           const { data: updateData, error: updateError } = await supabase
             .from('profiles')
@@ -150,43 +229,102 @@ app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async
             console.error('❌ Error updating subscription status:', updateError);
             console.error('Error code:', updateError.code);
             console.error('Error message:', updateError.message);
+            console.error('Error details:', updateError.details);
+            console.error('Error hint:', updateError.hint);
+            console.error('Full error object:', JSON.stringify(updateError, null, 2));
           } else if (!updateData || updateData.length === 0) {
             console.error('❌ Update returned no rows - RLS policy may be blocking update');
             console.error('User ID:', userId);
+            console.error('This suggests the service role key may not be working correctly');
+            console.error('Attempting alternative update method...');
+            
+            // Try using RPC or direct SQL as fallback
+            // First, let's try updating with a different approach
+            const { data: altUpdateData, error: altError } = await supabase.rpc('update_profile_subscription', {
+              p_user_id: userId,
+              p_status: status,
+              p_subscription_id: subscription.id
+            }).catch(async () => {
+              // If RPC doesn't exist, try a workaround: delete and reinsert
+              // But first, let's just log more details
+              console.error('RPC method not available, checking if we can at least read the row...');
+              const { data: readTest } = await supabase
+                .from('profiles')
+                .select('*')
+                .eq('id', userId)
+                .single();
+              console.log('Can we read the row?', readTest ? 'Yes' : 'No');
+              return { data: null, error: { message: 'RPC not available' } };
+            });
+            
+            if (altUpdateData) {
+              console.log('✅ Alternative update method succeeded');
+            } else if (altError) {
+              console.error('❌ Alternative update also failed:', altError);
+            }
           } else {
-            console.log(`✅ Subscription ${status} for user: ${userId}`);
+            console.log(`✅ Successfully updated subscription ${status} for user: ${userId}`);
             console.log('Updated profile:', JSON.stringify(updateData, null, 2));
           }
         } else {
           console.warn('⚠️ No user found with subscription ID:', subscription.id);
-          console.log('Attempting to find user by customer email...');
+          console.log('Step 2: Attempting to find user by customer email from Stripe...');
           
           // Fallback: Try to find user by customer email from Stripe
           // We need to get the customer object from Stripe to get the email
           try {
             if (subscription.customer) {
+              console.log('Retrieving customer from Stripe:', subscription.customer);
               const customer = await stripe.customers.retrieve(subscription.customer);
               const customerEmail = customer.email;
               
-              console.log('Customer email from Stripe:', customerEmail);
+              console.log('Customer retrieved from Stripe');
+              console.log('Customer email:', customerEmail);
+              console.log('Customer ID:', customer.id);
               
               if (customerEmail) {
-                // Find user by email
+                // Find user by email (case-insensitive search)
+                console.log('Step 3: Searching for user by email in database:', customerEmail);
                 const { data: emailProfiles, error: emailError } = await supabase
                   .from('profiles')
-                  .select('id, email')
-                  .eq('email', customerEmail)
+                  .select('id, email, subscription_id, subscription_status')
+                  .ilike('email', customerEmail)
                   .limit(1);
                 
                 if (emailError) {
                   console.error('❌ Error finding user by email:', emailError);
-                } else if (emailProfiles && emailProfiles.length > 0) {
+                  console.error('Error code:', emailError.code);
+                  console.error('Error message:', emailError.message);
+                  console.error('Error details:', emailError.details);
+                } else {
+                  console.log('Email query result - Profiles found:', emailProfiles ? emailProfiles.length : 0);
+                  if (emailProfiles && emailProfiles.length > 0) {
+                    console.log('Found profiles by email:', JSON.stringify(emailProfiles, null, 2));
+                  }
+                }
+                
+                if (emailProfiles && emailProfiles.length > 0) {
                   const userId = emailProfiles[0].id;
                   const status = subscription.status === 'active' ? 'active' : 'inactive';
                   
-                  console.log(`Found user by email: ${userId}`);
+                  console.log(`✅ Found user by email: ${userId}`);
+                  console.log(`Current subscription_id in DB: ${emailProfiles[0].subscription_id || 'NULL'}`);
+                  console.log(`Updating subscription_id to: ${subscription.id}`);
+                  console.log(`Updating subscription_status to: ${status}`);
                   
                   // Update with subscription ID and status
+                  // Verify we're using service role key
+                  console.log('Verifying Supabase client configuration...');
+                  console.log('Service role key present:', !!process.env.SUPABASE_SERVICE_ROLE_KEY);
+                  console.log('Service role key length:', process.env.SUPABASE_SERVICE_ROLE_KEY ? process.env.SUPABASE_SERVICE_ROLE_KEY.length : 0);
+                  console.log('Supabase URL:', process.env.SUPABASE_URL);
+                  
+                  // Try the update
+                  console.log('Attempting UPDATE operation...');
+                  console.log('User ID:', userId);
+                  console.log('New subscription_status:', status);
+                  console.log('New subscription_id:', subscription.id);
+                  
                   const { data: updateData, error: updateError } = await supabase
                     .from('profiles')
                     .update({
@@ -197,29 +335,134 @@ app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async
                     .eq('id', userId)
                     .select();
                   
+                  console.log('Update operation completed');
+                  console.log('Update data returned:', updateData ? `${updateData.length} row(s)` : 'NULL');
+                  console.log('Update error:', updateError ? JSON.stringify(updateError, null, 2) : 'NULL');
+                  
                   if (updateError) {
                     console.error('❌ Error updating subscription status:', updateError);
                     console.error('Error code:', updateError.code);
                     console.error('Error message:', updateError.message);
+                    console.error('Error details:', updateError.details);
+                    console.error('Error hint:', updateError.hint);
+                    console.error('This suggests an RLS policy issue or database constraint violation');
                   } else if (!updateData || updateData.length === 0) {
                     console.error('❌ Update returned no rows - RLS policy may be blocking update');
                     console.error('User ID:', userId);
                     console.error('Email:', customerEmail);
+                    console.error('Subscription ID:', subscription.id);
+                    console.error('This suggests the service role key is not bypassing RLS correctly');
+                    console.error('The UPDATE policy requires auth.uid() IS NULL, but it may not be NULL');
+                    
+                    // Try to verify the row exists and can be read
+                    const { data: verifyData, error: verifyError } = await supabase
+                      .from('profiles')
+                      .select('id, email, subscription_status, subscription_id')
+                      .eq('id', userId)
+                      .single();
+                    
+                    console.log('Verification query - Can we read the row?', verifyData ? 'Yes' : 'No');
+                    console.log('Verification query - Error:', verifyError ? JSON.stringify(verifyError, null, 2) : 'NULL');
+                    if (verifyData) {
+                      console.log('Current row data:', JSON.stringify(verifyData, null, 2));
+                    }
                   } else {
-                    console.log(`✅ Subscription ${status} for user: ${userId} (found by email)`);
+                    console.log(`✅ Successfully updated subscription ${status} for user: ${userId} (found by email)`);
                     console.log('Updated profile:', JSON.stringify(updateData, null, 2));
                   }
                 } else {
                   console.warn('⚠️ No user found with email:', customerEmail);
+                  console.log('Step 4: Attempting to find user in auth.users and create profile...');
+                  
+                  // Try to find the user in auth.users by email
+                  try {
+                    // List users by email (Supabase Admin API)
+                    const { data: authUsers, error: listUsersError } = await supabase.auth.admin.listUsers();
+                    
+                    if (listUsersError) {
+                      console.error('❌ Error listing auth users:', listUsersError);
+                    } else {
+                      // Find user by email (case-insensitive)
+                      const matchingUser = authUsers.users.find(
+                        u => u.email && u.email.toLowerCase() === customerEmail.toLowerCase()
+                      );
+                      
+                      if (matchingUser) {
+                        console.log(`✅ Found user in auth.users: ${matchingUser.id}`);
+                        console.log('Creating profile for this user...');
+                        
+                        const status = subscription.status === 'active' ? 'active' : 'inactive';
+                        const profileData = {
+                          id: matchingUser.id,
+                          email: customerEmail,
+                          role: 'customer',
+                          subscription_status: status,
+                          subscription_id: subscription.id,
+                          subscription_started_at: new Date().toISOString(),
+                          subscription_updated_at: new Date().toISOString(),
+                          terms_accepted: true, // Assume terms accepted if they have a subscription
+                          terms_accepted_at: new Date().toISOString()
+                        };
+                        
+                        console.log('Creating profile with data:', JSON.stringify(profileData, null, 2));
+                        
+                        const { data: newProfile, error: createError } = await supabase
+                          .from('profiles')
+                          .insert(profileData)
+                          .select();
+                        
+                        if (createError) {
+                          console.error('❌ Error creating profile:', createError);
+                          console.error('Error code:', createError.code);
+                          console.error('Error message:', createError.message);
+                          console.error('Error details:', createError.details);
+                          console.error('Error hint:', createError.hint);
+                        } else if (!newProfile || newProfile.length === 0) {
+                          console.error('❌ Profile creation returned no rows - RLS policy may be blocking insert');
+                        } else {
+                          console.log(`✅ Profile created successfully for user: ${matchingUser.id}`);
+                          console.log('Created profile:', JSON.stringify(newProfile, null, 2));
+                        }
+                      } else {
+                        console.warn('⚠️ No user found in auth.users with email:', customerEmail);
+                        console.warn('This could mean:');
+                        console.warn('  1. The user profile was not created in the database');
+                        console.warn('  2. The email in Stripe does not match the email in the database');
+                        console.warn('  3. The user signed up with a different email');
+                        console.warn('  4. The user does not exist in auth.users');
+                        
+                        // List all profiles to help debug
+                        console.log('Listing sample profiles in database for debugging...');
+                        const { data: allProfiles, error: listError } = await supabase
+                          .from('profiles')
+                          .select('id, email, subscription_id')
+                          .limit(10);
+                        
+                        if (listError) {
+                          console.error('❌ Error listing profiles:', listError);
+                        } else {
+                          console.log('Sample profiles in database:', JSON.stringify(allProfiles, null, 2));
+                        }
+                      }
+                    }
+                  } catch (authErr) {
+                    console.error('❌ Error searching auth users:', authErr);
+                  }
                 }
+              } else {
+                console.warn('⚠️ Customer has no email in Stripe');
               }
+            } else {
+              console.warn('⚠️ Subscription has no customer ID');
             }
           } catch (stripeError) {
             console.error('❌ Error retrieving customer from Stripe:', stripeError);
+            console.error('Stripe error message:', stripeError.message);
+            console.error('Stripe error type:', stripeError.type);
           }
         }
       } else {
-        console.warn('⚠️ Supabase not configured');
+        console.warn('⚠️ Supabase not configured - cannot update subscription');
       }
     } else {
       console.log('Unhandled event type:', event.type);
@@ -2162,18 +2405,72 @@ app.post('/api/auth/signup', async (req, res) => {
       email_confirm: true // Auto-confirm email for simplicity
     });
     
-    if (authError) {
-      console.error('❌ Auth user creation failed:', authError);
-      return res.status(400).json({ error: authError.message });
-    }
+    let userId;
     
-    console.log('✅ Auth user created successfully');
-    console.log('  User ID:', authData.user.id);
-    console.log('  User email:', authData.user.email);
+    if (authError) {
+      // If user already exists, try to get the existing user
+      if (authError.message && authError.message.includes('already been registered')) {
+        console.warn('⚠️ User already exists in auth.users, attempting to retrieve...');
+        
+        // Try to get the existing user by email
+        const { data: existingUsers, error: listError } = await supabase.auth.admin.listUsers();
+        
+        if (listError) {
+          console.error('❌ Error listing users:', listError);
+          return res.status(400).json({ error: authError.message });
+        }
+        
+        const existingUser = existingUsers.users.find(u => u.email === email);
+        
+        if (existingUser) {
+          console.log('✅ Found existing user:', existingUser.id);
+          userId = existingUser.id;
+          
+          // Check if profile already exists
+          console.log('Checking if profile exists for user ID:', userId);
+          const { data: existingProfile, error: profileCheckError } = await supabase
+            .from('profiles')
+            .select('id, email, role')
+            .eq('id', userId)
+            .maybeSingle();
+          
+          console.log('Profile check result - Data:', existingProfile ? JSON.stringify(existingProfile, null, 2) : 'NULL');
+          console.log('Profile check result - Error:', profileCheckError ? JSON.stringify(profileCheckError, null, 2) : 'NULL');
+          
+          if (profileCheckError) {
+            console.error('❌ Error checking existing profile:', profileCheckError);
+            console.error('Error code:', profileCheckError.code);
+            console.error('Error message:', profileCheckError.message);
+            // Don't return error - try to create profile anyway if check fails
+            console.log('⚠️ Profile check failed, will attempt to create profile');
+          }
+          
+          if (existingProfile && existingProfile.id) {
+            // Profile exists, user is already registered
+            console.log('✅ Profile exists - user is fully registered');
+            console.log('Existing profile:', JSON.stringify(existingProfile, null, 2));
+            return res.status(400).json({ error: 'A user with this email address has already been registered' });
+          }
+          
+          // Profile doesn't exist, we'll create it below
+          console.log('⚠️ User exists in auth but profile is missing, will create profile');
+        } else {
+          return res.status(400).json({ error: authError.message });
+        }
+      } else {
+        console.error('❌ Auth user creation failed:', authError);
+        return res.status(400).json({ error: authError.message });
+      }
+    } else {
+      console.log('✅ Auth user created successfully');
+      console.log('  User ID:', authData.user.id);
+      console.log('  User email:', authData.user.email);
+      userId = authData.user.id;
+    }
     
     // Create profile with role and terms acceptance
     const profileData = {
-      id: authData.user.id,
+      id: userId,
       email: email,
       role: role === 'internal' ? 'internal' : 'customer', // Only allow setting internal role if explicitly requested
       terms_accepted: true,
@@ -2183,10 +2480,17 @@ app.post('/api/auth/signup', async (req, res) => {
     console.log('Creating profile in database...');
     console.log('Profile data:', JSON.stringify(profileData, null, 2));
     
+    console.log('Attempting to insert profile with data:', JSON.stringify(profileData, null, 2));
+    console.log('Supabase client configured:', !!supabase);
+    console.log('Service role key present:', !!process.env.SUPABASE_SERVICE_ROLE_KEY);
+    
     const { data: profileDataResult, error: profileError } = await supabase
       .from('profiles')
       .insert(profileData)
       .select();
+    
+    console.log('Profile insert result - Data:', profileDataResult ? 'Present' : 'NULL');
+    console.log('Profile insert result - Error:', profileError ? 'Present' : 'NULL');
     
     if (profileError) {
       console.error('❌ Profile creation error:', profileError);
@@ -2194,11 +2498,29 @@ app.post('/api/auth/signup', async (req, res) => {
       console.error('Error message:', profileError.message);
       console.error('Error details:', profileError.details);
       console.error('Error hint:', profileError.hint);
+      console.error('Full error object:', JSON.stringify(profileError, null, 2));
+      
+      // Check if it's a duplicate key error (profile already exists)
+      if (profileError.code === '23505' || profileError.message.includes('duplicate key')) {
+        console.log('Profile already exists - user is fully registered');
+        return res.status(400).json({ error: 'A user with this email address has already been registered' });
+      }
+      
+      // Check if it's a foreign key constraint error
+      if (profileError.code === '23503' || profileError.message.includes('foreign key')) {
+        console.error('Foreign key constraint violation - auth user might not exist');
+        return res.status(500).json({ 
+          error: 'Database constraint error. The user account may be in an invalid state.',
+          details: profileError.message 
+        });
+      }
+      
       // User created but profile failed - this is a critical error
       // Return error response so frontend knows signup failed
       return res.status(500).json({ 
         error: 'Failed to create user profile. Please try again or contact support.',
-        details: profileError.message 
+        details: profileError.message,
+        code: profileError.code
       });
     } else {
       console.log('✅ Profile created successfully');
@@ -2206,7 +2528,8 @@ app.post('/api/auth/signup', async (req, res) => {
       
       // Verify profile was actually created
       if (!profileDataResult || profileDataResult.length === 0) {
-        console.error('❌ Profile creation returned no data');
+        console.error('❌ Profile creation returned no data - RLS might still be blocking');
+        console.error('Even though insert() succeeded, select() returned no rows');
         return res.status(500).json({ 
           error: 'Failed to create user profile. Please try again.' 
         });

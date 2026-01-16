@@ -1333,12 +1333,21 @@ document.addEventListener('keydown', (e) => {
 function openAdvancedModal() {
     advancedModal.style.display = 'flex';
     advancedModal.classList.add('show');
-    advancedChatInput.focus();
     
     // Reset conversation history
     advancedConversationHistory = [];
     advancedChatMessages.innerHTML = '';
     generateFromAdvancedBtn.disabled = true;
+    
+    // Reset textarea
+    advancedChatInput.value = '';
+    autoResizeTextarea(advancedChatInput);
+    advancedSendBtn.disabled = true;
+    
+    // Focus input after a brief delay for smooth animation
+    setTimeout(() => {
+        advancedChatInput.focus();
+    }, 100);
     
     // Add welcome message from assistant
     addAdvancedWelcomeMessage();
@@ -1404,7 +1413,68 @@ When you have enough context, I'll tell you. Then generate the hypothesis.`;
     addAdvancedMessage('assistant', welcomeMessage);
 }
 
-function addAdvancedMessage(role, content) {
+// Simple markdown-like formatting for messages
+function formatMessageContent(content) {
+    // Escape HTML first
+    let html = content
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+    
+    // Split into lines for better processing
+    const lines = html.split('\n');
+    const processedLines = [];
+    let inList = false;
+    let listItems = [];
+    
+    for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        const listMatch = line.match(/^[\-\*] (.+)$/) || line.match(/^\d+\. (.+)$/);
+        
+        if (listMatch) {
+            // Start or continue list
+            if (!inList) {
+                inList = true;
+                listItems = [];
+            }
+            listItems.push(`<li>${listMatch[1]}</li>`);
+        } else {
+            // End list if we were in one
+            if (inList) {
+                processedLines.push(`<ul>${listItems.join('')}</ul>`);
+                inList = false;
+                listItems = [];
+            }
+            
+            // Process other markdown
+            let processedLine = line
+                // Bold (**text**)
+                .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+                // Inline code (`code`)
+                .replace(/`([^`]+)`/g, '<code>$1</code>');
+            
+            processedLines.push(processedLine);
+        }
+    }
+    
+    // Close any remaining list
+    if (inList) {
+        processedLines.push(`<ul>${listItems.join('')}</ul>`);
+    }
+    
+    // Join lines and process code blocks (which can span multiple lines)
+    html = processedLines.join('\n');
+    
+    // Code blocks (```code```) - handle after line processing
+    html = html.replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>');
+    
+    // Convert remaining line breaks to <br>
+    html = html.replace(/\n/g, '<br>');
+    
+    return html;
+}
+
+function addAdvancedMessage(role, content, isStreaming = false) {
     const messageDiv = document.createElement('div');
     messageDiv.className = `advanced-chat-message ${role}`;
     
@@ -1414,21 +1484,73 @@ function addAdvancedMessage(role, content) {
     
     const messageContent = document.createElement('div');
     messageContent.className = 'advanced-message-content';
-    messageContent.textContent = content;
+    
+    // Use innerHTML for formatted content, but escape user input for security
+    if (role === 'assistant' && !isStreaming) {
+        messageContent.innerHTML = formatMessageContent(content);
+    } else {
+        // For user messages and streaming, use textContent for security
+        messageContent.textContent = content;
+    }
+    
+    // Add copy button for assistant messages
+    if (role === 'assistant' && !isStreaming) {
+        const copyBtn = document.createElement('button');
+        copyBtn.className = 'advanced-message-copy-btn';
+        copyBtn.title = 'Copy message';
+        copyBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M9.5 1.5H4.5C3.67 1.5 3 2.17 3 3V9.5H4.5V3H9.5V1.5ZM11 4.5H6.5C5.67 4.5 5 5.17 5 6V12.5C5 13.33 5.67 14 6.5 14H11C11.83 14 12.5 13.33 12.5 12.5V6C12.5 5.17 11.83 4.5 11 4.5ZM11 12.5H6.5V6H11V12.5Z" fill="currentColor"/></svg>';
+        copyBtn.addEventListener('click', () => {
+            navigator.clipboard.writeText(content).then(() => {
+                copyBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M5.5 10.5L2 7L2.82 6.18L5.5 8.86L11.18 3.18L12 4L5.5 10.5Z" fill="currentColor"/></svg>';
+                setTimeout(() => {
+                    copyBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M9.5 1.5H4.5C3.67 1.5 3 2.17 3 3V9.5H4.5V3H9.5V1.5ZM11 4.5H6.5C5.67 4.5 5 5.17 5 6V12.5C5 13.33 5.67 14 6.5 14H11C11.83 14 12.5 13.33 12.5 12.5V6C12.5 5.17 11.83 4.5 11 4.5ZM11 12.5H6.5V6H11V12.5Z" fill="currentColor"/></svg>';
+                }, 2000);
+            });
+        });
+        messageDiv.appendChild(copyBtn);
+    }
     
     messageDiv.appendChild(avatar);
     messageDiv.appendChild(messageContent);
     advancedChatMessages.appendChild(messageDiv);
     
-    // Scroll to bottom
-    advancedChatMessages.scrollTop = advancedChatMessages.scrollHeight;
+    // Smooth scroll to bottom
+    setTimeout(() => {
+        advancedChatMessages.scrollTo({
+            top: advancedChatMessages.scrollHeight,
+            behavior: 'smooth'
+        });
+    }, 10);
     
-    // Store in conversation history
-    advancedConversationHistory.push({ role, content });
+    // Store in conversation history (only when not streaming)
+    if (!isStreaming) {
+        advancedConversationHistory.push({ role, content });
+        
+        // Enable generate button if we have at least one user message
+        const hasUserMessage = advancedConversationHistory.some(msg => msg.role === 'user');
+        generateFromAdvancedBtn.disabled = !hasUserMessage;
+    }
     
-    // Enable generate button if we have at least one user message
-    const hasUserMessage = advancedConversationHistory.some(msg => msg.role === 'user');
-    generateFromAdvancedBtn.disabled = !hasUserMessage;
+    return { messageDiv, messageContent };
+}
+
+// Auto-resize textarea
+function autoResizeTextarea(textarea) {
+    textarea.style.height = 'auto';
+    textarea.style.height = Math.min(textarea.scrollHeight, 200) + 'px';
+}
+
+// Initialize textarea auto-resize
+if (advancedChatInput) {
+    advancedChatInput.addEventListener('input', () => {
+        autoResizeTextarea(advancedChatInput);
+        // Enable/disable send button based on content
+        const hasContent = advancedChatInput.value.trim().length > 0;
+        advancedSendBtn.disabled = !hasContent;
+    });
+    
+    // Initial resize
+    autoResizeTextarea(advancedChatInput);
 }
 
 // Send message in advanced mode
@@ -1437,7 +1559,9 @@ advancedSendBtn.addEventListener('click', sendAdvancedMessage);
 advancedChatInput.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
-        sendAdvancedMessage();
+        if (!advancedSendBtn.disabled) {
+            sendAdvancedMessage();
+        }
     }
 });
 
@@ -1458,7 +1582,7 @@ async function sendAdvancedMessage() {
     // Clear input
     advancedChatInput.value = '';
     
-    // Add loading indicator
+    // Add loading indicator with typing animation
     const loadingDiv = document.createElement('div');
     loadingDiv.className = 'advanced-chat-message assistant';
     loadingDiv.id = 'advanced-loading';
@@ -1466,12 +1590,19 @@ async function sendAdvancedMessage() {
     loadingAvatar.className = 'advanced-message-avatar';
     loadingAvatar.textContent = 'AI';
     const loadingContent = document.createElement('div');
-    loadingContent.className = 'advanced-message-content';
-    loadingContent.textContent = 'Thinking...';
+    loadingContent.className = 'advanced-message-content typing';
+    loadingContent.textContent = '';
     loadingDiv.appendChild(loadingAvatar);
     loadingDiv.appendChild(loadingContent);
     advancedChatMessages.appendChild(loadingDiv);
-    advancedChatMessages.scrollTop = advancedChatMessages.scrollHeight;
+    
+    // Smooth scroll
+    setTimeout(() => {
+        advancedChatMessages.scrollTo({
+            top: advancedChatMessages.scrollHeight,
+            behavior: 'smooth'
+        });
+    }, 10);
     
     // Get valid token (refresh if needed)
     const token = await getValidToken();
@@ -1523,7 +1654,7 @@ async function sendAdvancedMessage() {
         let buffer = '';
         let fullResponse = '';
         
-        // Create assistant message div
+        // Create assistant message div for streaming
         const assistantDiv = document.createElement('div');
         assistantDiv.className = 'advanced-chat-message assistant';
         const avatarDiv = document.createElement('div');
@@ -1555,13 +1686,44 @@ async function sendAdvancedMessage() {
                         
                         if (data.content) {
                             fullResponse += data.content;
+                            // Use textContent during streaming for security
                             contentDiv.textContent = fullResponse;
-                            advancedChatMessages.scrollTop = advancedChatMessages.scrollHeight;
+                            
+                            // Smooth scroll during streaming
+                            setTimeout(() => {
+                                advancedChatMessages.scrollTo({
+                                    top: advancedChatMessages.scrollHeight,
+                                    behavior: 'smooth'
+                                });
+                            }, 10);
                         }
                         
                         if (data.done) {
+                            // Replace with formatted version and add copy button
+                            contentDiv.innerHTML = formatMessageContent(fullResponse);
+                            
+                            // Add copy button
+                            const copyBtn = document.createElement('button');
+                            copyBtn.className = 'advanced-message-copy-btn';
+                            copyBtn.title = 'Copy message';
+                            copyBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M9.5 1.5H4.5C3.67 1.5 3 2.17 3 3V9.5H4.5V3H9.5V1.5ZM11 4.5H6.5C5.67 4.5 5 5.17 5 6V12.5C5 13.33 5.67 14 6.5 14H11C11.83 14 12.5 13.33 12.5 12.5V6C12.5 5.17 11.83 4.5 11 4.5ZM11 12.5H6.5V6H11V12.5Z" fill="currentColor"/></svg>';
+                            copyBtn.addEventListener('click', () => {
+                                navigator.clipboard.writeText(fullResponse).then(() => {
+                                    copyBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M5.5 10.5L2 7L2.82 6.18L5.5 8.86L11.18 3.18L12 4L5.5 10.5Z" fill="currentColor"/></svg>';
+                                    setTimeout(() => {
+                                        copyBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M9.5 1.5H4.5C3.67 1.5 3 2.17 3 3V9.5H4.5V3H9.5V1.5ZM11 4.5H6.5C5.67 4.5 5 5.17 5 6V12.5C5 13.33 5.67 14 6.5 14H11C11.83 14 12.5 13.33 12.5 12.5V6C12.5 5.17 11.83 4.5 11 4.5ZM11 12.5H6.5V6H11V12.5Z" fill="currentColor"/></svg>';
+                                    }, 2000);
+                                });
+                            });
+                            assistantDiv.appendChild(copyBtn);
+                            
                             // Add to conversation history
                             advancedConversationHistory.push({ role: 'assistant', content: fullResponse });
+                            
+                            // Enable generate button
+                            const hasUserMessage = advancedConversationHistory.some(msg => msg.role === 'user');
+                            generateFromAdvancedBtn.disabled = !hasUserMessage;
+                            
                             return;
                         }
                     } catch (e) {
@@ -1583,7 +1745,7 @@ async function sendAdvancedMessage() {
     } finally {
         // Re-enable input
         advancedChatInput.disabled = false;
-        advancedSendBtn.disabled = false;
+        autoResizeTextarea(advancedChatInput);
         advancedChatInput.focus();
     }
 }

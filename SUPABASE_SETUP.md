@@ -32,6 +32,8 @@ CREATE TABLE IF NOT EXISTS profiles (
   id UUID REFERENCES auth.users(id) ON DELETE CASCADE PRIMARY KEY,
   email TEXT,
   role TEXT DEFAULT 'customer' CHECK (role IN ('customer', 'internal')),
+  terms_accepted BOOLEAN DEFAULT false,
+  terms_accepted_at TIMESTAMP WITH TIME ZONE,
   subscription_status TEXT DEFAULT 'inactive' CHECK (subscription_status IN ('active', 'inactive', 'canceled')),
   subscription_id TEXT,
   subscription_started_at TIMESTAMP WITH TIME ZONE,
@@ -92,9 +94,14 @@ CREATE INDEX IF NOT EXISTS profiles_subscription_status_idx ON profiles(subscrip
 CREATE INDEX IF NOT EXISTS profiles_subscription_id_idx ON profiles(subscription_id);
 ```
 
-**If you already have the profiles table, run this migration to add subscription fields:**
+**If you already have the profiles table, run this migration to add all missing fields:**
 
 ```sql
+-- Add terms acceptance fields
+ALTER TABLE profiles 
+ADD COLUMN IF NOT EXISTS terms_accepted BOOLEAN DEFAULT false,
+ADD COLUMN IF NOT EXISTS terms_accepted_at TIMESTAMP WITH TIME ZONE;
+
 -- Add subscription fields to existing profiles table
 ALTER TABLE profiles 
 ADD COLUMN IF NOT EXISTS subscription_status TEXT DEFAULT 'inactive' CHECK (subscription_status IN ('active', 'inactive', 'canceled')),
@@ -105,6 +112,11 @@ ADD COLUMN IF NOT EXISTS subscription_updated_at TIMESTAMP WITH TIME ZONE;
 -- Create indexes for subscription queries
 CREATE INDEX IF NOT EXISTS profiles_subscription_status_idx ON profiles(subscription_status);
 CREATE INDEX IF NOT EXISTS profiles_subscription_id_idx ON profiles(subscription_id);
+
+-- Update existing users to have terms_accepted = true (if they exist)
+UPDATE profiles 
+SET terms_accepted = true, terms_accepted_at = created_at 
+WHERE terms_accepted IS NULL OR terms_accepted = false;
 ```
 
 ## Step 2: Set Environment Variables in Railway

@@ -66,6 +66,9 @@ app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async
         // Get subscription details
         const subscriptionId = session.subscription;
         
+        console.log('Attempting to update profile for user:', userId);
+        console.log('Subscription ID:', subscriptionId);
+        
         // Update user profile with subscription info
         const { data, error } = await supabase
           .from('profiles')
@@ -79,9 +82,17 @@ app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async
         
         if (error) {
           console.error('❌ Error updating profile:', error);
+          console.error('Error code:', error.code);
+          console.error('Error message:', error.message);
+          console.error('Error details:', error.details);
+          console.error('Error hint:', error.hint);
+        } else if (!data || data.length === 0) {
+          console.error('❌ Update returned no rows - RLS policy may be blocking update');
+          console.error('User ID:', userId);
+          console.error('This likely means the RLS policy is preventing the update');
         } else {
           console.log(`✅ Subscription activated for user: ${userId}`);
-          console.log('Updated profile:', data);
+          console.log('Updated profile:', JSON.stringify(data, null, 2));
         }
       } else {
         console.warn('⚠️ Missing userId or supabase not configured');
@@ -124,9 +135,14 @@ app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async
           
           if (updateError) {
             console.error('❌ Error updating subscription status:', updateError);
+            console.error('Error code:', updateError.code);
+            console.error('Error message:', updateError.message);
+          } else if (!updateData || updateData.length === 0) {
+            console.error('❌ Update returned no rows - RLS policy may be blocking update');
+            console.error('User ID:', userId);
           } else {
             console.log(`✅ Subscription ${status} for user: ${userId}`);
-            console.log('Updated profile:', updateData);
+            console.log('Updated profile:', JSON.stringify(updateData, null, 2));
           }
         } else {
           console.warn('⚠️ No user found with subscription ID:', subscription.id);
@@ -170,9 +186,15 @@ app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async
                   
                   if (updateError) {
                     console.error('❌ Error updating subscription status:', updateError);
+                    console.error('Error code:', updateError.code);
+                    console.error('Error message:', updateError.message);
+                  } else if (!updateData || updateData.length === 0) {
+                    console.error('❌ Update returned no rows - RLS policy may be blocking update');
+                    console.error('User ID:', userId);
+                    console.error('Email:', customerEmail);
                   } else {
                     console.log(`✅ Subscription ${status} for user: ${userId} (found by email)`);
-                    console.log('Updated profile:', updateData);
+                    console.log('Updated profile:', JSON.stringify(updateData, null, 2));
                   }
                 } else {
                   console.warn('⚠️ No user found with email:', customerEmail);

@@ -140,7 +140,8 @@ app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async
           console.log('Current profile:', JSON.stringify(existingProfile, null, 2));
           
           // Update user profile with subscription info
-          const { data, error } = await supabase
+          // Do UPDATE without .select() first, then verify separately
+          const { error } = await supabase
             .from('profiles')
             .update({
               subscription_status: 'active',
@@ -148,8 +149,7 @@ app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async
               subscription_started_at: existingProfile.subscription_started_at || new Date().toISOString(),
               subscription_updated_at: new Date().toISOString()
             })
-            .eq('id', userId)
-            .select();
+            .eq('id', userId);
           
           if (error) {
             console.error('❌ Error updating profile:', error);
@@ -157,13 +157,25 @@ app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async
             console.error('Error message:', error.message);
             console.error('Error details:', error.details);
             console.error('Error hint:', error.hint);
-          } else if (!data || data.length === 0) {
-            console.error('❌ Update returned no rows - RLS policy may be blocking update');
-            console.error('User ID:', userId);
-            console.error('This likely means the RLS policy is preventing the update');
           } else {
-            console.log(`✅ Subscription activated for user: ${userId}`);
-            console.log('Updated profile:', JSON.stringify(data, null, 2));
+            // Update completed without error, verify by reading
+            console.log('✅ Update completed without error, verifying...');
+            const { data: verifyData, error: verifyError } = await supabase
+              .from('profiles')
+              .select('id, email, subscription_status, subscription_id, subscription_updated_at')
+              .eq('id', userId)
+              .single();
+            
+            if (verifyError) {
+              console.error('❌ Error reading updated row:', verifyError);
+            } else if (verifyData && verifyData.subscription_status === 'active' && verifyData.subscription_id === subscriptionId) {
+              console.log(`✅ Subscription activated for user: ${userId}`);
+              console.log('Updated profile:', JSON.stringify(verifyData, null, 2));
+            } else {
+              console.warn('⚠️ Update may not have worked - values do not match');
+              console.warn('Expected status: active, Got:', verifyData?.subscription_status);
+              console.warn('Expected subscription_id:', subscriptionId, 'Got:', verifyData?.subscription_id);
+            }
           }
         }
       } else {
@@ -211,19 +223,18 @@ app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async
           console.log(`Updating subscription status to: ${status}`);
           
           // Update subscription status
-          // Try using .update() with explicit service role context
+          // Do UPDATE without .select() first, then verify separately
           console.log('Attempting UPDATE with service role...');
           console.log('User ID to update:', userId);
           console.log('New status:', status);
           
-          const { data: updateData, error: updateError } = await supabase
+          const { error: updateError } = await supabase
             .from('profiles')
             .update({
               subscription_status: status,
               subscription_updated_at: new Date().toISOString()
             })
-            .eq('id', userId)
-            .select();
+            .eq('id', userId);
           
           if (updateError) {
             console.error('❌ Error updating subscription status:', updateError);
@@ -231,40 +242,24 @@ app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async
             console.error('Error message:', updateError.message);
             console.error('Error details:', updateError.details);
             console.error('Error hint:', updateError.hint);
-            console.error('Full error object:', JSON.stringify(updateError, null, 2));
-          } else if (!updateData || updateData.length === 0) {
-            console.error('❌ Update returned no rows - RLS policy may be blocking update');
-            console.error('User ID:', userId);
-            console.error('This suggests the service role key may not be working correctly');
-            console.error('Attempting alternative update method...');
-            
-            // Try using RPC or direct SQL as fallback
-            // First, let's try updating with a different approach
-            const { data: altUpdateData, error: altError } = await supabase.rpc('update_profile_subscription', {
-              p_user_id: userId,
-              p_status: status,
-              p_subscription_id: subscription.id
-            }).catch(async () => {
-              // If RPC doesn't exist, try a workaround: delete and reinsert
-              // But first, let's just log more details
-              console.error('RPC method not available, checking if we can at least read the row...');
-              const { data: readTest } = await supabase
-                .from('profiles')
-                .select('*')
-                .eq('id', userId)
-                .single();
-              console.log('Can we read the row?', readTest ? 'Yes' : 'No');
-              return { data: null, error: { message: 'RPC not available' } };
-            });
-            
-            if (altUpdateData) {
-              console.log('✅ Alternative update method succeeded');
-            } else if (altError) {
-              console.error('❌ Alternative update also failed:', altError);
-            }
           } else {
-            console.log(`✅ Successfully updated subscription ${status} for user: ${userId}`);
-            console.log('Updated profile:', JSON.stringify(updateData, null, 2));
+            // Update completed without error, verify by reading
+            console.log('✅ Update completed without error, verifying...');
+            const { data: verifyData, error: verifyError } = await supabase
+              .from('profiles')
+              .select('id, email, subscription_status, subscription_id, subscription_updated_at')
+              .eq('id', userId)
+              .single();
+            
+            if (verifyError) {
+              console.error('❌ Error reading updated row:', verifyError);
+            } else if (verifyData && verifyData.subscription_status === status) {
+              console.log(`✅ Successfully updated subscription ${status} for user: ${userId}`);
+              console.log('Updated profile:', JSON.stringify(verifyData, null, 2));
+            } else {
+              console.warn('⚠️ Update may not have worked - status does not match');
+              console.warn('Expected:', status, 'Got:', verifyData?.subscription_status);
+            }
           }
         } else {
           console.warn('⚠️ No user found with subscription ID:', subscription.id);
@@ -325,18 +320,17 @@ app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async
                   console.log('New subscription_status:', status);
                   console.log('New subscription_id:', subscription.id);
                   
-                  const { data: updateData, error: updateError } = await supabase
+                  // Try UPDATE without .select() first to see if it actually updates
+                  const { error: updateError } = await supabase
                     .from('profiles')
                     .update({
                       subscription_status: status,
                       subscription_id: subscription.id,
                       subscription_updated_at: new Date().toISOString()
                     })
-                    .eq('id', userId)
-                    .select();
+                    .eq('id', userId);
                   
-                  console.log('Update operation completed');
-                  console.log('Update data returned:', updateData ? `${updateData.length} row(s)` : 'NULL');
+                  console.log('Update operation completed (without select)');
                   console.log('Update error:', updateError ? JSON.stringify(updateError, null, 2) : 'NULL');
                   
                   if (updateError) {
@@ -346,29 +340,32 @@ app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async
                     console.error('Error details:', updateError.details);
                     console.error('Error hint:', updateError.hint);
                     console.error('This suggests an RLS policy issue or database constraint violation');
-                  } else if (!updateData || updateData.length === 0) {
-                    console.error('❌ Update returned no rows - RLS policy may be blocking update');
-                    console.error('User ID:', userId);
-                    console.error('Email:', customerEmail);
-                    console.error('Subscription ID:', subscription.id);
-                    console.error('This suggests the service role key is not bypassing RLS correctly');
-                    console.error('The UPDATE policy requires auth.uid() IS NULL, but it may not be NULL');
-                    
-                    // Try to verify the row exists and can be read
+                  } else {
+                    // Update succeeded, now verify by reading the row
+                    console.log('✅ Update completed without error, verifying by reading row...');
                     const { data: verifyData, error: verifyError } = await supabase
                       .from('profiles')
-                      .select('id, email, subscription_status, subscription_id')
+                      .select('id, email, subscription_status, subscription_id, subscription_updated_at')
                       .eq('id', userId)
                       .single();
                     
-                    console.log('Verification query - Can we read the row?', verifyData ? 'Yes' : 'No');
-                    console.log('Verification query - Error:', verifyError ? JSON.stringify(verifyError, null, 2) : 'NULL');
-                    if (verifyData) {
-                      console.log('Current row data:', JSON.stringify(verifyData, null, 2));
+                    if (verifyError) {
+                      console.error('❌ Error reading updated row:', verifyError);
+                    } else if (verifyData) {
+                      console.log(`✅ Successfully updated subscription ${status} for user: ${userId} (found by email)`);
+                      console.log('Updated profile:', JSON.stringify(verifyData, null, 2));
+                      
+                      // Verify the update actually happened
+                      if (verifyData.subscription_status === status && verifyData.subscription_id === subscription.id) {
+                        console.log('✅ Update verified - subscription status and ID match expected values');
+                      } else {
+                        console.warn('⚠️ Update may not have worked - values do not match');
+                        console.warn('Expected status:', status, 'Got:', verifyData.subscription_status);
+                        console.warn('Expected subscription_id:', subscription.id, 'Got:', verifyData.subscription_id);
+                      }
+                    } else {
+                      console.error('❌ Update completed but cannot read updated row');
                     }
-                  } else {
-                    console.log(`✅ Successfully updated subscription ${status} for user: ${userId} (found by email)`);
-                    console.log('Updated profile:', JSON.stringify(updateData, null, 2));
                   }
                 } else {
                   console.warn('⚠️ No user found with email:', customerEmail);

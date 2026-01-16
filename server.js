@@ -257,10 +257,16 @@ if (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
       auth: {
         autoRefreshToken: false,
         persistSession: false
+      },
+      // Explicitly set db schema to public
+      db: {
+        schema: 'public'
       }
     }
   );
   console.log('Supabase client initialized');
+  console.log('Using service role key (should bypass RLS):', process.env.SUPABASE_SERVICE_ROLE_KEY ? 'Yes' : 'No');
+  console.log('Service role key length:', process.env.SUPABASE_SERVICE_ROLE_KEY ? process.env.SUPABASE_SERVICE_ROLE_KEY.length : 0);
 } else {
   console.warn('WARNING: Supabase credentials not set. Authentication and save features will not work.');
   console.warn('Required: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY');

@@ -1425,33 +1425,60 @@ function formatMessageContent(content) {
     const lines = html.split('\n');
     const processedLines = [];
     let inList = false;
+    let listType = null; // 'ul' or 'ol'
     let listItems = [];
     
     for (let i = 0; i < lines.length; i++) {
         const line = lines[i];
-        const listMatch = line.match(/^[\-\*] (.+)$/) || line.match(/^\d+\. (.+)$/);
+        // Match bullet lists (-, *), numbered lists (1. or 1))
+        const bulletMatch = line.match(/^[\-\*] (.+)$/);
+        const numberedMatch = line.match(/^\d+\. (.+)$/) || line.match(/^\d+\) (.+)$/);
+        const listMatch = bulletMatch || numberedMatch;
         
         if (listMatch) {
+            // Determine list type
+            const currentListType = bulletMatch ? 'ul' : 'ol';
+            
             // Start or continue list
             if (!inList) {
                 inList = true;
+                listType = currentListType;
+                listItems = [];
+            } else if (listType !== currentListType) {
+                // List type changed, close previous list and start new one
+                processedLines.push(`<${listType}>${listItems.join('')}</${listType}>`);
+                listType = currentListType;
                 listItems = [];
             }
+            
             listItems.push(`<li>${listMatch[1]}</li>`);
         } else {
             // End list if we were in one
             if (inList) {
-                processedLines.push(`<ul>${listItems.join('')}</ul>`);
+                processedLines.push(`<${listType}>${listItems.join('')}</${listType}>`);
                 inList = false;
+                listType = null;
                 listItems = [];
             }
             
-            // Process other markdown
-            let processedLine = line
-                // Bold (**text**)
-                .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-                // Inline code (`code`)
-                .replace(/`([^`]+)`/g, '<code>$1</code>');
+            // Process markdown headers first (before other formatting)
+            let processedLine = line;
+            
+            // Headers (###, ##, #)
+            if (line.match(/^### (.+)$/)) {
+                processedLine = `<h3>${line.replace(/^### (.+)$/, '$1')}</h3>`;
+            } else if (line.match(/^## (.+)$/)) {
+                processedLine = `<h2>${line.replace(/^## (.+)$/, '$1')}</h2>`;
+            } else if (line.match(/^# (.+)$/)) {
+                processedLine = `<h1>${line.replace(/^# (.+)$/, '$1')}</h1>`;
+            } else {
+                // Process other markdown only if not a header
+                processedLine = processedLine
+                    // Bold (**text**)
+                    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+                    // Inline code (`code`)
+                    .replace(/`([^`]+)`/g, '<code>$1</code>');
+            }
             
             processedLines.push(processedLine);
         }
@@ -1459,7 +1486,7 @@ function formatMessageContent(content) {
     
     // Close any remaining list
     if (inList) {
-        processedLines.push(`<ul>${listItems.join('')}</ul>`);
+        processedLines.push(`<${listType}>${listItems.join('')}</${listType}>`);
     }
     
     // Join lines and process code blocks (which can span multiple lines)
@@ -1478,9 +1505,18 @@ function addAdvancedMessage(role, content, isStreaming = false) {
     const messageDiv = document.createElement('div');
     messageDiv.className = `advanced-chat-message ${role}`;
     
-    const avatar = document.createElement('div');
-    avatar.className = 'advanced-message-avatar';
-    avatar.textContent = role === 'user' ? 'U' : 'AI';
+    // Only show avatar for assistant messages
+    let avatar = null;
+    if (role === 'assistant') {
+        avatar = document.createElement('div');
+        avatar.className = 'advanced-message-avatar';
+        // Use Vantum logo for assistant messages
+        const logoImg = document.createElement('img');
+        logoImg.src = '/vantum-logo.png';
+        logoImg.alt = 'Vantum';
+        logoImg.className = 'advanced-avatar-logo';
+        avatar.appendChild(logoImg);
+    }
     
     const messageContent = document.createElement('div');
     messageContent.className = 'advanced-message-content';
@@ -1510,7 +1546,9 @@ function addAdvancedMessage(role, content, isStreaming = false) {
         messageDiv.appendChild(copyBtn);
     }
     
-    messageDiv.appendChild(avatar);
+    if (avatar) {
+        messageDiv.appendChild(avatar);
+    }
     messageDiv.appendChild(messageContent);
     advancedChatMessages.appendChild(messageDiv);
     
@@ -1659,7 +1697,12 @@ async function sendAdvancedMessage() {
         assistantDiv.className = 'advanced-chat-message assistant';
         const avatarDiv = document.createElement('div');
         avatarDiv.className = 'advanced-message-avatar';
-        avatarDiv.textContent = 'AI';
+        // Use Vantum logo for assistant messages
+        const logoImg = document.createElement('img');
+        logoImg.src = '/vantum-logo.png';
+        logoImg.alt = 'Vantum';
+        logoImg.className = 'advanced-avatar-logo';
+        avatarDiv.appendChild(logoImg);
         const contentDiv = document.createElement('div');
         contentDiv.className = 'advanced-message-content';
         assistantDiv.appendChild(avatarDiv);

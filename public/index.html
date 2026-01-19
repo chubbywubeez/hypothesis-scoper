@@ -194,15 +194,12 @@
                 <div class="advanced-input-footer">
                     <small class="advanced-input-hint">Press Enter to send, Shift+Enter for new line</small>
                 </div>
+
+                <!-- Generate button (replaces floating up-arrow button to avoid overlap on mobile) -->
+                <button id="generate-from-advanced-btn" class="advanced-generate-btn" disabled>
+                    Generate hypothesis
+                </button>
             </div>
-            
-            <!-- Floating action button for generating hypothesis -->
-            <button id="generate-from-advanced-btn" class="advanced-floating-action-btn" disabled title="Generate Hypothesis from Conversation">
-                <svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M9 1.5V16.5M9 1.5L3 7.5M9 1.5L15 7.5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                </svg>
-                <span>Generate</span>
-            </button>
         </div>
     </div>
 

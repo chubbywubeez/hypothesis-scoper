@@ -3183,13 +3183,40 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok' });
 });
 
-// Serve landing page as root route
-app.get('/', (req, res) => {
+// Base path for the app - set to '/planner' to serve at getvantum.com/planner
+// Set to '' to serve at root (default)
+// Using '' for subdomain setup (planner.getvantum.com)
+const BASE_PATH = process.env.BASE_PATH || '';
+
+// Serve landing page at base path
+app.get(BASE_PATH, (req, res) => {
   res.sendFile(__dirname + '/public/landing.html');
 });
 
-// Static file serving - must be AFTER API routes but BEFORE app.listen()
-app.use(express.static('public'));
+// Serve app pages at base path
+app.get(BASE_PATH + '/index.html', (req, res) => {
+  res.sendFile(__dirname + '/public/index.html');
+});
+
+app.get(BASE_PATH + '/login.html', (req, res) => {
+  res.sendFile(__dirname + '/public/login.html');
+});
+
+app.get(BASE_PATH + '/admin.html', (req, res) => {
+  res.sendFile(__dirname + '/public/admin.html');
+});
+
+app.get(BASE_PATH + '/terms.html', (req, res) => {
+  res.sendFile(__dirname + '/public/terms.html');
+});
+
+app.get(BASE_PATH + '/privacy.html', (req, res) => {
+  res.sendFile(__dirname + '/public/privacy.html');
+});
+
+// Static file serving at base path - must be AFTER API routes but BEFORE app.listen()
+// This serves CSS, JS, images, etc. at /planner/styles.css, /planner/app.js, etc.
+app.use(BASE_PATH, express.static('public'));
 
 // Start server
 app.listen(PORT, () => {

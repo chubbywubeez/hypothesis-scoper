@@ -75,32 +75,33 @@ git push -u origin main
 
 To connect your own domain to your Railway deployment:
 
+**Important:** To keep your existing website at `www.getvantum.com` (e.g., Framer site), use a **subdomain** for this app (e.g., `planner.getvantum.com`). This allows both sites to coexist.
+
 1. **In Railway Dashboard:**
    - Go to your project → Click on your service
    - Navigate to "Settings" tab
    - Scroll down to "Domains" section
    - Click "Custom Domain" or "Add Domain"
-   - Enter your domain name (e.g., `yourdomain.com` or `www.yourdomain.com`)
-   - Railway will provide you with DNS records to configure
+   - Enter your **subdomain** (e.g., `planner.getvantum.com` - NOT the root domain)
+   - Railway will provide you with a CNAME record to configure
 
 2. **Configure DNS Records:**
    Railway will give you one of these options:
 
-   **Option A: CNAME Record (Recommended for subdomains)**
+   **CNAME Record (For subdomains - RECOMMENDED)**
    - Type: `CNAME`
-   - Name: `www` (or your subdomain)
-   - Value: Railway will provide this (e.g., `your-app.up.railway.app`)
-   - TTL: `3600` (or default)
-
-   **Option B: A Record (For root domain)**
-   - Type: `A`
-   - Name: `@` (or leave blank for root domain)
-   - Value: Railway will provide IP addresses (usually 2-4 IPs)
-   - TTL: `3600` (or default)
+   - Name: `planner` (your subdomain - NOT `@` or `www`)
+   - Value: Railway will provide this (e.g., `41t16nxr.up.railway.app`)
+   - TTL: `1 Hour` (or default)
+   - ⚠️ **Important:** 
+     - Most DNS providers (including GoDaddy) do NOT allow CNAME records on the root domain (`@`)
+     - Use a subdomain like `planner.getvantum.com` instead of root domain
+     - This allows you to keep `www.getvantum.com` pointing to your existing site (Framer, etc.)
 
 3. **Where to Add DNS Records:**
    - Log into your domain registrar (GoDaddy, Namecheap, Cloudflare, etc.)
    - Navigate to DNS Management / DNS Settings
+   - **Important:** If you see an error "Record name conflicts with another record", you need to DELETE the existing record first, then add the new one
    - Add the records Railway provided
    - Save changes
 
@@ -115,9 +116,11 @@ To connect your own domain to your Railway deployment:
    - Your app will then be accessible at your custom domain!
 
 **Important Notes:**
+- **Use a subdomain:** Access your app at `planner.getvantum.com` (not root domain)
+- **Keep your existing website:** If you have `www.getvantum.com` pointing to another service (like Framer), keep that CNAME record - don't delete it
+- **GoDaddy setup:** Add a CNAME record with Name: `planner` (not `@`)
+- **Why subdomain?** Railway shows CNAME for root domains, but GoDaddy doesn't allow CNAME on root - using a subdomain solves this
 - If using Cloudflare, make sure SSL/TLS encryption mode is set to "Full" or "Full (strict)"
-- For root domains (yourdomain.com), Railway may require you to use A records
-- For subdomains (www.yourdomain.com), CNAME records work best
 - Railway automatically provides SSL certificates via Let's Encrypt
 
 ## Step 5: Verify Deployment

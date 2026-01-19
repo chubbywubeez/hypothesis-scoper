@@ -235,7 +235,7 @@ async function handleLogin() {
         if (data.expires_at) {
             localStorage.setItem('tokenExpiresAt', data.expires_at);
         }
-        window.location.href = '/index.html';
+        window.location.href = '/planner/index.html';
         
     } catch (error) {
         console.error('Login error:', error);

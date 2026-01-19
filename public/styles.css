@@ -1156,6 +1156,8 @@ textarea:focus {
     height: 100%;
     background-color: rgba(0, 0, 0, 0.7);
     animation: fadeIn 0.2s ease;
+    overflow-y: auto; /* Allow scrolling */
+    -webkit-overflow-scrolling: touch; /* Smooth scrolling on iOS */
 }
 
 .confluence-modal-content.payment-offer-modal {
@@ -1163,9 +1165,13 @@ textarea:focus {
     /* NOTE: This must beat `.confluence-modal-content` (max-width: 600px) which appears later. */
     width: min(980px, 95vw);
     max-width: 980px;
-    overflow: hidden; /* so the glow/gradients don’t leak */
+    max-height: 90vh;
+    overflow-y: auto; /* Allow scrolling on mobile */
+    overflow-x: hidden;
     background: radial-gradient(1200px 600px at 20% 0%, rgba(0, 212, 170, 0.10) 0%, rgba(26, 30, 41, 1) 45%) , #1A1E29;
     border: 1px solid rgba(255, 255, 255, 0.08);
+    display: flex;
+    flex-direction: column;
 }
 
 .payment-offer-header {
@@ -1191,6 +1197,8 @@ textarea:focus {
     display: grid;
     grid-template-columns: 1.1fr 0.9fr;
     gap: 0;
+    flex: 1;
+    min-height: 0; /* Allow flex child to shrink */
 }
 
 .payment-offer-left {
@@ -1322,6 +1330,23 @@ textarea:focus {
 .payment-offer-preview-bubble-ai {
     background: rgba(255, 255, 255, 0.06);
     color: #E5E7EB;
+    margin-left: 20px; /* Base indentation for AI responses to show back-and-forth dialogue */
+}
+
+/* Progressive indentation for multiple AI responses - each subsequent response indented more */
+/* First AI response after user message */
+.payment-offer-preview-chat .payment-offer-preview-bubble-user + .payment-offer-preview-bubble-ai {
+    margin-left: 20px;
+}
+
+/* Second AI response */
+.payment-offer-preview-chat .payment-offer-preview-bubble-user + .payment-offer-preview-bubble-ai + .payment-offer-preview-bubble-ai {
+    margin-left: 28px;
+}
+
+/* Third AI response and beyond */
+.payment-offer-preview-chat .payment-offer-preview-bubble-user + .payment-offer-preview-bubble-ai + .payment-offer-preview-bubble-ai + .payment-offer-preview-bubble-ai {
+    margin-left: 36px;
 }
 
 .payment-offer-preview-output {
@@ -1346,19 +1371,77 @@ textarea:focus {
 }
 
 @media (max-width: 900px) {
+    .confluence-modal-content.payment-offer-modal {
+        width: 95vw;
+        max-height: 95vh;
+        margin: 10px;
+    }
+    
     .payment-offer-body {
         grid-template-columns: 1fr;
     }
     .payment-offer-left {
         border-right: none;
         border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        padding: 20px;
     }
     .payment-offer-title-row {
         flex-direction: column;
         align-items: flex-start;
+        gap: 10px;
     }
     .payment-offer-title {
         font-size: 28px;
+        line-height: 1.2;
+    }
+    .payment-offer-right {
+        padding: 20px;
+    }
+}
+
+/* Mobile-specific fixes */
+@media (max-width: 768px) {
+    .confluence-modal-content.payment-offer-modal {
+        width: 100vw;
+        max-width: 100vw;
+        max-height: 100vh;
+        margin: 0;
+        border-radius: 0;
+        height: 100vh;
+    }
+    
+    .payment-offer-header {
+        padding: 16px 18px;
+        flex-shrink: 0;
+    }
+    
+    .payment-offer-body {
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch; /* Smooth scrolling on iOS */
+    }
+    
+    .payment-offer-left {
+        padding: 20px 18px;
+    }
+    
+    .payment-offer-title {
+        font-size: 24px;
+    }
+    
+    .payment-offer-subtitle {
+        font-size: 16px;
+    }
+    
+    .payment-offer-description {
+        font-size: 14px;
+    }
+    
+    .payment-offer-right {
+        padding: 18px;
+    }
+    
+    .payment-offer-preview {
+        padding: 14px;
     }
 }
 
@@ -1366,6 +1449,15 @@ textarea:focus {
     display: flex;
     align-items: center;
     justify-content: center;
+    padding: 20px; /* Add padding for mobile */
+}
+
+/* On mobile, don't center - let it fill the screen */
+@media (max-width: 768px) {
+    .confluence-modal.show {
+        align-items: flex-start;
+        padding: 0;
+    }
 }
 
 .confluence-modal-content {

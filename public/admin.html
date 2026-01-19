@@ -9,10 +9,17 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="styles.css">
     <style>
+        /* Override global white text color for admin dashboard */
+        body {
+            color: #1a1a1a;
+            background-color: #f5f5f5;
+        }
+        
         .admin-container {
             max-width: 1400px;
             margin: 0 auto;
             padding: 20px;
+            color: #1a1a1a;
         }
         .admin-header {
             display: flex;
@@ -22,6 +29,7 @@
         }
         .admin-header h1 {
             margin: 0;
+            color: #1a1a1a;
         }
         .stats-grid {
             display: grid;
@@ -58,6 +66,9 @@
             align-items: center;
             margin-bottom: 20px;
         }
+        .users-header h2 {
+            color: #1a1a1a;
+        }
         .users-table {
             width: 100%;
             border-collapse: collapse;
@@ -74,6 +85,7 @@
             padding: 12px;
             border-bottom: 1px solid #eee;
             font-size: 14px;
+            color: #1a1a1a;
         }
         .users-table tr:hover {
             background: #f9f9f9;
@@ -133,6 +145,12 @@
             border: 1px solid #ddd;
             border-radius: 4px;
             font-size: 14px;
+            color: #1a1a1a;
+            background-color: white;
+        }
+        .role-select {
+            color: #1a1a1a;
+            background-color: white;
         }
     </style>
 </head>
@@ -350,7 +368,7 @@
             });
 
             if (filteredUsers.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; padding: 40px;">No users found</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="9" style="text-align: center; padding: 40px; color: #1a1a1a;">No users found</td></tr>';
                 document.getElementById('users-table').style.display = 'table';
                 document.getElementById('users-loading').style.display = 'none';
                 return;

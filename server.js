@@ -95,7 +95,7 @@ app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async
             if (authError) {
               console.error('❌ User does not exist in auth.users:', authError);
               console.error('Cannot create profile for non-existent user');
-            } else {
+        } else {
               console.log('✅ User exists in auth.users:', authUser.user.email);
               
               // Create the profile
@@ -138,26 +138,26 @@ app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async
           // Profile exists, update it
           console.log('✅ Profile exists, updating subscription info');
           console.log('Current profile:', JSON.stringify(existingProfile, null, 2));
-          
-          // Update user profile with subscription info
+        
+        // Update user profile with subscription info
           // Do UPDATE without .select() first, then verify separately
           const { error } = await supabase
-            .from('profiles')
-            .update({
-              subscription_status: 'active',
-              subscription_id: subscriptionId,
+          .from('profiles')
+          .update({
+            subscription_status: 'active',
+            subscription_id: subscriptionId,
               subscription_started_at: existingProfile.subscription_started_at || new Date().toISOString(),
               subscription_updated_at: new Date().toISOString()
-            })
+          })
             .eq('id', userId);
-          
-          if (error) {
-            console.error('❌ Error updating profile:', error);
-            console.error('Error code:', error.code);
-            console.error('Error message:', error.message);
-            console.error('Error details:', error.details);
-            console.error('Error hint:', error.hint);
-          } else {
+        
+        if (error) {
+          console.error('❌ Error updating profile:', error);
+          console.error('Error code:', error.code);
+          console.error('Error message:', error.message);
+          console.error('Error details:', error.details);
+          console.error('Error hint:', error.hint);
+        } else {
             // Update completed without error, verify by reading
             console.log('✅ Update completed without error, verifying...');
             const { data: verifyData, error: verifyError } = await supabase
@@ -169,7 +169,7 @@ app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async
             if (verifyError) {
               console.error('❌ Error reading updated row:', verifyError);
             } else if (verifyData && verifyData.subscription_status === 'active' && verifyData.subscription_id === subscriptionId) {
-              console.log(`✅ Subscription activated for user: ${userId}`);
+          console.log(`✅ Subscription activated for user: ${userId}`);
               console.log('Updated profile:', JSON.stringify(verifyData, null, 2));
             } else {
               console.warn('⚠️ Update may not have worked - values do not match');
@@ -2423,9 +2423,9 @@ app.post('/api/auth/signup', async (req, res) => {
         
         if (listError) {
           console.error('❌ Error listing users:', listError);
-          return res.status(400).json({ error: authError.message });
-        }
-        
+      return res.status(400).json({ error: authError.message });
+    }
+    
         const existingUser = existingUsers.users.find(u => u.email === email);
         
         if (existingUser) {
@@ -2468,9 +2468,9 @@ app.post('/api/auth/signup', async (req, res) => {
         return res.status(400).json({ error: authError.message });
       }
     } else {
-      console.log('✅ Auth user created successfully');
-      console.log('  User ID:', authData.user.id);
-      console.log('  User email:', authData.user.email);
+    console.log('✅ Auth user created successfully');
+    console.log('  User ID:', authData.user.id);
+    console.log('  User email:', authData.user.email);
       userId = authData.user.id;
     }
     
@@ -3152,14 +3152,22 @@ app.get('/api/admin/dashboard', async (req, res) => {
       .eq('subscription_status', 'active');
     
     // Get total generations
-    const { count: totalGenerations } = await supabase
+    const { count: totalGenerations, error: genCountError } = await supabase
       .from('generation_events')
       .select('*', { count: 'exact', head: true });
     
+    if (genCountError) {
+      console.error('Error getting generation count:', genCountError);
+    }
+    
     // Get total tokens used
-    const { data: tokenData } = await supabase
+    const { data: tokenData, error: tokenError } = await supabase
       .from('generation_events')
       .select('tokens_used');
+    
+    if (tokenError) {
+      console.error('Error getting token data:', tokenError);
+    }
     
     const totalTokens = tokenData?.reduce((sum, event) => sum + (event.tokens_used || 0), 0) || 0;
     
@@ -3261,16 +3269,24 @@ app.get('/api/admin/users', async (req, res) => {
           .single();
         
         // Get generation count
-        const { count: generationCount } = await supabase
+        const { count: generationCount, error: genCountError } = await supabase
           .from('generation_events')
           .select('*', { count: 'exact', head: true })
           .eq('user_id', profile.id);
         
+        if (genCountError) {
+          console.error(`Error getting generation count for user ${profile.id}:`, genCountError);
+        }
+        
         // Get total tokens used
-        const { data: tokenData } = await supabase
+        const { data: tokenData, error: tokenError } = await supabase
           .from('generation_events')
           .select('tokens_used')
           .eq('user_id', profile.id);
+        
+        if (tokenError) {
+          console.error(`Error getting token data for user ${profile.id}:`, tokenError);
+        }
         
         const totalTokens = tokenData?.reduce((sum, event) => sum + (event.tokens_used || 0), 0) || 0;
         

@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Hypothesis Scoper</title>
+    <title>Action Planner</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -25,8 +25,8 @@
             </div>
             <div class="header-content">
                 <img src="/vantum-logo.png" alt="Vantum" class="logo" />
-                <h1>Hypothesis Scoper</h1>
-                <p class="subtitle">Convert ideas → hypotheses → scopes</p>
+                <h1>Action Planner</h1>
+                <p class="subtitle">Turn your idea into a clear plan in 60 seconds.</p>
             </div>
         </header>
 
@@ -247,30 +247,64 @@
 
     <!-- Payment Modal for Advanced Mode -->
     <div id="payment-modal" class="confluence-modal" style="display: none;">
-        <div class="confluence-modal-content" style="max-width: 500px;">
-            <div class="confluence-modal-header">
-                <h3>Upgrade to Advanced Mode</h3>
-                <button id="close-payment-modal" class="confluence-modal-close-btn">&times;</button>
+        <div class="confluence-modal-content payment-offer-modal">
+            <div class="payment-offer-header">
+                <span class="payment-offer-badge">Most Popular</span>
+                <button id="close-payment-modal" class="confluence-modal-close-btn" aria-label="Close">&times;</button>
             </div>
-            <div class="confluence-modal-body">
-                <div style="text-align: center; padding: 20px 0;">
-                    <h4 style="color: #00D4AA; margin-bottom: 15px;">Unlock Advanced Mode</h4>
-                    <p style="color: #A3A6B4; margin-bottom: 20px; line-height: 1.6;">
-                        Advanced Mode gives you access to our AI-powered conversation feature that helps you refine your ideas before generating hypotheses.
+
+            <div class="payment-offer-body">
+                <div class="payment-offer-left">
+                    <div class="payment-offer-title-row">
+                        <h2 class="payment-offer-title">Unlock Advanced Mode (99¢)</h2>
+                        <span class="payment-offer-price-pill">$0.99 to start</span>
+                    </div>
+
+                    <p class="payment-offer-subtitle">Get guided like a real business consultant.</p>
+
+                    <p class="payment-offer-description">
+                        Advanced Mode is an interactive chat that challenges your thinking, sharpens your idea, and turns it into a plan you can actually execute.
                     </p>
-                    <div style="background: #1A1D29; border-radius: 8px; padding: 20px; margin: 20px 0;">
-                        <ul style="text-align: left; color: #E5E7EB; list-style: none; padding: 0;">
-                            <li style="margin-bottom: 10px;">✓ ChatGPT-like conversation interface</li>
-                            <li style="margin-bottom: 10px;">✓ AI-powered idea refinement</li>
-                            <li style="margin-bottom: 10px;">✓ Better hypothesis generation</li>
-                            <li style="margin-bottom: 10px;">✓ Unlimited conversations</li>
-                        </ul>
+
+                    <ul class="payment-offer-bullets">
+                        <li>✅ Consultant-style back-and-forth</li>
+                        <li>✅ Identifies risks and assumptions</li>
+                        <li>✅ Cuts the fluff, finds the real problem</li>
+                        <li>✅ Generates a stronger plan</li>
+                    </ul>
+
+                    <div class="payment-offer-actions">
+                        <button id="payment-upgrade-btn" class="btn btn-primary payment-offer-primary">Unlock for $0.99</button>
+                        <button id="payment-cancel-btn" class="btn btn-secondary payment-offer-secondary">Not now</button>
                     </div>
                 </div>
-            </div>
-            <div class="confluence-modal-footer">
-                <button id="payment-cancel-btn" class="btn btn-secondary">Cancel</button>
-                <button id="payment-upgrade-btn" class="btn btn-primary">Upgrade Now</button>
+
+                <div class="payment-offer-right" aria-hidden="true">
+                    <div class="payment-offer-preview">
+                        <div class="payment-offer-preview-chat">
+                            <div class="payment-offer-preview-label">You:</div>
+                            <div class="payment-offer-preview-bubble payment-offer-preview-bubble-user">
+                                I want to build an app that helps founders focus
+                            </div>
+                            <div class="payment-offer-preview-bubble payment-offer-preview-bubble-ai">
+                                Who exactly is it for, and what are they stuck on today?
+                            </div>
+                            <div class="payment-offer-preview-bubble payment-offer-preview-bubble-ai">
+                                What would success look like in 7 days?
+                            </div>
+                        </div>
+
+                        <div class="payment-offer-preview-output">
+                            <div class="payment-offer-preview-output-title">Output Preview</div>
+                            <ul>
+                                <li>Problem</li>
+                                <li>Risks</li>
+                                <li>Assumptions</li>
+                                <li>Plan</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>

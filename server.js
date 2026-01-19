@@ -2023,6 +2023,28 @@ app.post('/api/auth/signup', async (req, res) => {
       return res.status(400).json({ error: 'Email and password are required' });
     }
     
+    // Validate password requirements
+    const passwordErrors = [];
+    if (password.length < 8) {
+      passwordErrors.push('at least 8 characters');
+    }
+    if (!/[A-Z]/.test(password)) {
+      passwordErrors.push('one uppercase letter');
+    }
+    if (!/[a-z]/.test(password)) {
+      passwordErrors.push('one lowercase letter');
+    }
+    if (!/[0-9]/.test(password)) {
+      passwordErrors.push('one number');
+    }
+    
+    if (passwordErrors.length > 0) {
+      console.error('❌ Validation failed: Password does not meet requirements');
+      return res.status(400).json({ 
+        error: `Password must contain ${passwordErrors.join(', ')}` 
+      });
+    }
+    
     // Validate terms acceptance
     if (!terms_accepted) {
       console.error('❌ Validation failed: Terms not accepted');
@@ -2252,6 +2274,11 @@ app.post('/api/auth/login', async (req, res) => {
       .select('*')
       .eq('id', authData.user.id)
       .single();
+    
+    // Track login event (don't await - fire and forget so it doesn't slow down login)
+    trackLogin(authData.user.id, req).catch(err => {
+      console.error('Failed to track login (non-blocking):', err);
+    });
     
     // Return user info, access token, and refresh token for persistent sessions
     res.json({
@@ -3154,6 +3181,11 @@ app.delete('/api/scopes/:id', async (req, res) => {
 // Health check endpoint
 app.get('/health', (req, res) => {
   res.json({ status: 'ok' });
+});
+
+// Serve landing page as root route
+app.get('/', (req, res) => {
+  res.sendFile(__dirname + '/public/landing.html');
 });
 
 // Static file serving - must be AFTER API routes but BEFORE app.listen()

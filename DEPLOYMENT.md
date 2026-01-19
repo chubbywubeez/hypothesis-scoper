@@ -71,12 +71,62 @@ git push -u origin main
    - Click on your service → "Settings" → "Generate Domain" (or use the auto-generated one)
    - Your app will be live at that URL!
 
-## Step 4: Verify Deployment
+## Step 4: Connect Custom Domain (Optional)
 
-1. Visit your Railway URL
-2. You should see the Hypothesis Scoper interface
-3. Test by entering an idea and generating a hypothesis
-4. Make sure your OpenAI API key is working
+To connect your own domain to your Railway deployment:
+
+1. **In Railway Dashboard:**
+   - Go to your project → Click on your service
+   - Navigate to "Settings" tab
+   - Scroll down to "Domains" section
+   - Click "Custom Domain" or "Add Domain"
+   - Enter your domain name (e.g., `yourdomain.com` or `www.yourdomain.com`)
+   - Railway will provide you with DNS records to configure
+
+2. **Configure DNS Records:**
+   Railway will give you one of these options:
+
+   **Option A: CNAME Record (Recommended for subdomains)**
+   - Type: `CNAME`
+   - Name: `www` (or your subdomain)
+   - Value: Railway will provide this (e.g., `your-app.up.railway.app`)
+   - TTL: `3600` (or default)
+
+   **Option B: A Record (For root domain)**
+   - Type: `A`
+   - Name: `@` (or leave blank for root domain)
+   - Value: Railway will provide IP addresses (usually 2-4 IPs)
+   - TTL: `3600` (or default)
+
+3. **Where to Add DNS Records:**
+   - Log into your domain registrar (GoDaddy, Namecheap, Cloudflare, etc.)
+   - Navigate to DNS Management / DNS Settings
+   - Add the records Railway provided
+   - Save changes
+
+4. **Wait for DNS Propagation:**
+   - DNS changes can take 5 minutes to 48 hours to propagate
+   - Usually takes 15-30 minutes
+   - You can check propagation status at: https://www.whatsmydns.net
+
+5. **Verify Domain:**
+   - Railway will automatically verify your domain once DNS propagates
+   - You'll see a green checkmark when it's verified
+   - Your app will then be accessible at your custom domain!
+
+**Important Notes:**
+- If using Cloudflare, make sure SSL/TLS encryption mode is set to "Full" or "Full (strict)"
+- For root domains (yourdomain.com), Railway may require you to use A records
+- For subdomains (www.yourdomain.com), CNAME records work best
+- Railway automatically provides SSL certificates via Let's Encrypt
+
+## Step 5: Verify Deployment
+
+1. Visit your Railway URL (or custom domain if configured)
+2. You should see the landing page with "Stop building the wrong thing."
+3. Click "Turn my idea into a plan" to go to the login screen
+4. Test by logging in and entering an idea to generate a hypothesis
+5. Make sure your OpenAI API key is working
 
 ## Future Updates
 

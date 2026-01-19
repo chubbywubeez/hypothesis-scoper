@@ -9,6 +9,7 @@ const signupTab = document.getElementById('signup-tab');
 const authForm = document.getElementById('auth-form');
 const authEmail = document.getElementById('auth-email');
 const authPassword = document.getElementById('auth-password');
+const authPasswordConfirm = document.getElementById('auth-password-confirm');
 const authSubmitBtn = document.getElementById('auth-submit-btn');
 const authStatus = document.getElementById('auth-status');
 
@@ -23,6 +24,8 @@ if (savedToken) {
 function switchAuthMode(isLogin) {
     isLoginMode = isLogin;
     const signupOptionsGroup = document.getElementById('signup-options-group');
+    const passwordConfirmGroup = document.getElementById('password-confirm-group');
+    const passwordRequirements = document.getElementById('password-requirements');
     const termsCheckbox = document.getElementById('terms-checkbox');
     const newsletterCheckbox = document.getElementById('newsletter-checkbox');
     
@@ -33,9 +36,23 @@ function switchAuthMode(isLogin) {
         if (signupOptionsGroup) {
             signupOptionsGroup.style.display = 'none';
         }
+        if (passwordConfirmGroup) {
+            passwordConfirmGroup.style.display = 'none';
+        }
+        if (passwordRequirements) {
+            passwordRequirements.style.display = 'none';
+        }
+        if (authPasswordConfirm) {
+            authPasswordConfirm.removeAttribute('required');
+            authPasswordConfirm.value = '';
+        }
         if (termsCheckbox) {
             termsCheckbox.required = false;
             termsCheckbox.removeAttribute('required');
+        }
+        // Clear password validation styling
+        if (authPassword) {
+            authPassword.classList.remove('error', 'valid');
         }
     } else {
         signupTab.classList.add('active');
@@ -43,6 +60,16 @@ function switchAuthMode(isLogin) {
         authSubmitBtn.textContent = 'Sign Up';
         if (signupOptionsGroup) {
             signupOptionsGroup.style.display = 'block';
+        }
+        if (passwordConfirmGroup) {
+            passwordConfirmGroup.style.display = 'block';
+        }
+        // Don't show requirements by default - only show when password is invalid
+        if (passwordRequirements) {
+            passwordRequirements.style.display = 'none';
+        }
+        if (authPasswordConfirm) {
+            authPasswordConfirm.setAttribute('required', 'required');
         }
         if (termsCheckbox) {
             termsCheckbox.required = true;
@@ -57,6 +84,10 @@ function switchAuthMode(isLogin) {
         }
     }
     hideAuthStatus();
+    // Validate password when switching to signup mode (but don't show requirements unless invalid)
+    if (!isLogin && authPassword && authPassword.value.length > 0) {
+        validatePassword(authPassword.value);
+    }
 }
 
 // Show auth status message
@@ -71,6 +102,80 @@ function hideAuthStatus() {
     authStatus.style.display = 'none';
 }
 
+// Validate password against requirements
+function validatePassword(password) {
+    const requirements = {
+        length: password.length >= 8,
+        uppercase: /[A-Z]/.test(password),
+        lowercase: /[a-z]/.test(password),
+        number: /[0-9]/.test(password)
+    };
+    
+    const passwordRequirements = document.getElementById('password-requirements');
+    const isValid = Object.values(requirements).every(req => req === true);
+    
+    // Show requirements only if password is invalid and user has typed something
+    if (passwordRequirements) {
+        if (password.length > 0 && !isValid) {
+            passwordRequirements.style.display = 'block';
+        } else {
+            passwordRequirements.style.display = 'none';
+        }
+    }
+    
+    // Update requirement indicators
+    const reqLength = document.getElementById('req-length');
+    const reqUppercase = document.getElementById('req-uppercase');
+    const reqLowercase = document.getElementById('req-lowercase');
+    const reqNumber = document.getElementById('req-number');
+    
+    if (reqLength) {
+        reqLength.className = requirements.length ? 'valid' : 'invalid';
+    }
+    if (reqUppercase) {
+        reqUppercase.className = requirements.uppercase ? 'valid' : 'invalid';
+    }
+    if (reqLowercase) {
+        reqLowercase.className = requirements.lowercase ? 'valid' : 'invalid';
+    }
+    if (reqNumber) {
+        reqNumber.className = requirements.number ? 'valid' : 'invalid';
+    }
+    
+    // Update password field styling
+    if (authPassword) {
+        authPassword.classList.remove('error', 'valid');
+        if (password.length > 0) {
+            authPassword.classList.add(isValid ? 'valid' : 'error');
+        }
+    }
+    
+    return isValid;
+}
+
+// Validate password confirmation matches
+function validatePasswordMatch() {
+    if (!authPasswordConfirm || !authPassword) return true;
+    
+    const password = authPassword.value;
+    const confirm = authPasswordConfirm.value;
+    
+    if (confirm.length === 0) {
+        authPasswordConfirm.classList.remove('error', 'valid');
+        return false;
+    }
+    
+    if (password === confirm) {
+        authPasswordConfirm.classList.remove('error');
+        authPasswordConfirm.classList.add('valid');
+        return true;
+    } else {
+        authPasswordConfirm.classList.remove('valid');
+        authPasswordConfirm.classList.add('error');
+        return false;
+    }
+}
+
 // Check auth and redirect if valid
 async function checkAuthAndRedirect(token) {
     try {
@@ -82,7 +187,7 @@ async function checkAuthAndRedirect(token) {
         
         if (response.ok) {
             // Token is valid, redirect to main app
-            window.location.href = '/';
+            window.location.href = '/index.html';
         } else {
             // Token invalid, clear it
             localStorage.removeItem('authToken');
@@ -130,7 +235,7 @@ async function handleLogin() {
         if (data.expires_at) {
             localStorage.setItem('tokenExpiresAt', data.expires_at);
         }
-        window.location.href = '/';
+        window.location.href = '/index.html';
         
     } catch (error) {
         console.error('Login error:', error);
@@ -145,6 +250,7 @@ async function handleLogin() {
 async function handleSignup() {
     const email = authEmail.value.trim();
     const password = authPassword.value.trim();
+    const passwordConfirm = authPasswordConfirm ? authPasswordConfirm.value.trim() : '';
     const termsCheckbox = document.getElementById('terms-checkbox');
     const newsletterCheckbox = document.getElementById('newsletter-checkbox');
     
@@ -159,8 +265,18 @@ async function handleSignup() {
         return;
     }
     
-    if (password.length < 6) {
-        showAuthStatus('Password must be at least 6 characters', 'error');
+    // Validate password requirements
+    if (!validatePassword(password)) {
+        showAuthStatus('Password does not meet requirements. Please check the requirements below.', 'error');
+        return;
+    }
+    
+    // Validate password confirmation
+    if (password !== passwordConfirm) {
+        showAuthStatus('Passwords do not match', 'error');
+        if (authPasswordConfirm) {
+            authPasswordConfirm.classList.add('error');
+        }
         return;
     }
     
@@ -226,6 +342,28 @@ async function handleSignup() {
 // Event handlers
 loginTab.addEventListener('click', () => switchAuthMode(true));
 signupTab.addEventListener('click', () => switchAuthMode(false));
+
+// Real-time password validation
+if (authPassword) {
+    authPassword.addEventListener('input', (e) => {
+        if (!isLoginMode) {
+            validatePassword(e.target.value);
+            // Also re-validate password match if confirmation field has value
+            if (authPasswordConfirm && authPasswordConfirm.value.length > 0) {
+                validatePasswordMatch();
+            }
+        }
+    });
+}
+
+// Real-time password confirmation validation
+if (authPasswordConfirm) {
+    authPasswordConfirm.addEventListener('input', (e) => {
+        if (!isLoginMode) {
+            validatePasswordMatch();
+        }
+    });
+}
 
 authForm.addEventListener('submit', (e) => {
     e.preventDefault();

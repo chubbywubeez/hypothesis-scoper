@@ -1158,6 +1158,210 @@ textarea:focus {
     animation: fadeIn 0.2s ease;
 }
 
+.confluence-modal-content.payment-offer-modal {
+    /* Larger, richer modal like the reference image */
+    /* NOTE: This must beat `.confluence-modal-content` (max-width: 600px) which appears later. */
+    width: min(980px, 95vw);
+    max-width: 980px;
+    overflow: hidden; /* so the glow/gradients don’t leak */
+    background: radial-gradient(1200px 600px at 20% 0%, rgba(0, 212, 170, 0.10) 0%, rgba(26, 30, 41, 1) 45%) , #1A1E29;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.payment-offer-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 18px 22px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.payment-offer-badge {
+    text-transform: uppercase;
+    font-size: 12px;
+    letter-spacing: 0.08em;
+    font-weight: 700;
+    color: #0A0E17;
+    background: linear-gradient(135deg, #FFB400 0%, #FF7A00 100%);
+    padding: 6px 10px;
+    border-radius: 6px;
+}
+
+.payment-offer-body {
+    display: grid;
+    grid-template-columns: 1.1fr 0.9fr;
+    gap: 0;
+}
+
+.payment-offer-left {
+    padding: 26px 26px 24px 26px;
+    border-right: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.payment-offer-title-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 10px;
+}
+
+.payment-offer-title {
+    margin: 0;
+    color: #FFFFFF;
+    font-size: 34px;
+    line-height: 1.15;
+    letter-spacing: -0.02em;
+}
+
+.payment-offer-price-pill {
+    background: rgba(0, 122, 122, 0.25);
+    border: 1px solid rgba(0, 122, 122, 0.55);
+    color: #E8FFFA;
+    padding: 8px 12px;
+    border-radius: 999px;
+    font-weight: 700;
+    font-size: 14px;
+    white-space: nowrap;
+}
+
+.payment-offer-subtitle {
+    margin: 0 0 14px 0;
+    font-size: 18px;
+    font-weight: 600;
+    color: #E5E7EB;
+}
+
+.payment-offer-description {
+    margin: 0 0 18px 0;
+    color: #A3A6B4;
+    line-height: 1.65;
+}
+
+.payment-offer-bullets {
+    margin: 0 0 18px 0;
+    padding: 0;
+    list-style: none;
+    color: #E5E7EB;
+}
+
+.payment-offer-bullets li {
+    margin-bottom: 10px;
+}
+
+.payment-offer-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 18px;
+}
+
+.payment-offer-primary {
+    width: 100%;
+    background: linear-gradient(135deg, #007A7A 0%, #006666 100%);
+    border: 1px solid rgba(0, 122, 122, 0.6);
+}
+
+.payment-offer-primary:hover {
+    background: linear-gradient(135deg, #009999 0%, #007A7A 100%);
+}
+
+.payment-offer-secondary {
+    width: 100%;
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    color: #E5E7EB;
+}
+
+.payment-offer-secondary:hover {
+    background: rgba(255, 255, 255, 0.06);
+}
+
+.payment-offer-right {
+    padding: 26px;
+}
+
+.payment-offer-preview {
+    background: rgba(10, 14, 23, 0.55);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    padding: 16px;
+    display: grid;
+    gap: 14px;
+}
+
+.payment-offer-preview-chat {
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 10px;
+    padding: 12px;
+    background: rgba(26, 30, 41, 0.65);
+}
+
+.payment-offer-preview-label {
+    color: #A3A6B4;
+    font-size: 12px;
+    font-weight: 600;
+    margin-bottom: 8px;
+}
+
+.payment-offer-preview-bubble {
+    padding: 10px 12px;
+    border-radius: 10px;
+    margin-bottom: 8px;
+    font-size: 13px;
+    line-height: 1.4;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.payment-offer-preview-bubble-user {
+    background: rgba(0, 122, 122, 0.18);
+    border-color: rgba(0, 122, 122, 0.45);
+    color: #E8FFFA;
+}
+
+.payment-offer-preview-bubble-ai {
+    background: rgba(255, 255, 255, 0.06);
+    color: #E5E7EB;
+}
+
+.payment-offer-preview-output {
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 10px;
+    padding: 12px;
+    background: rgba(26, 30, 41, 0.65);
+}
+
+.payment-offer-preview-output-title {
+    color: #A3A6B4;
+    font-size: 12px;
+    font-weight: 700;
+    margin-bottom: 10px;
+}
+
+.payment-offer-preview-output ul {
+    margin: 0;
+    padding-left: 18px;
+    color: #A3A6B4;
+    font-size: 13px;
+}
+
+@media (max-width: 900px) {
+    .payment-offer-body {
+        grid-template-columns: 1fr;
+    }
+    .payment-offer-left {
+        border-right: none;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    .payment-offer-title-row {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    .payment-offer-title {
+        font-size: 28px;
+    }
+}
+
 .confluence-modal.show {
     display: flex;
     align-items: center;

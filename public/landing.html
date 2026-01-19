@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hypothesis Scoper - Stop building the wrong thing</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        /* Landing page specific styles */
+        .landing-container {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            padding: 40px 20px;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        /* Logo styling */
+        .landing-logo {
+            max-width: 80px;
+            height: auto;
+            margin-bottom: 40px;
+            display: block;
+            margin-left: auto;
+            margin-right: auto;
+            opacity: 1;
+            filter: brightness(0) invert(1);
+            transition: filter 0.3s ease;
+        }
+
+        .landing-logo:hover {
+            filter: brightness(0) invert(0.8);
+        }
+
+        /* Main heading */
+        .landing-heading {
+            font-size: 3.5em;
+            font-weight: 700;
+            color: #FFFFFF;
+            margin-bottom: 24px;
+            line-height: 1.2;
+            white-space: nowrap;
+        }
+
+        /* Subheading */
+        .landing-subheading {
+            font-size: 1.5em;
+            color: #A3A6B4;
+            margin-bottom: 48px;
+            line-height: 1.5;
+            font-weight: 400;
+        }
+
+        /* CTA Button - matches login screen teal color */
+        .landing-cta {
+            background: #007A7A;
+            color: #FFFFFF;
+            border: none;
+            padding: 18px 48px;
+            font-size: 1.2em;
+            font-weight: 600;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-family: 'Inter', sans-serif;
+            text-decoration: none;
+            display: inline-block;
+        }
+
+        .landing-cta:hover {
+            background: #009999;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 122, 122, 0.3);
+        }
+
+        .landing-cta:active {
+            transform: translateY(0);
+        }
+
+        /* Responsive design for mobile */
+        @media (max-width: 768px) {
+            .landing-container {
+                padding: 20px 15px;
+            }
+
+            .landing-logo {
+                max-width: 60px;
+                margin-bottom: 30px;
+            }
+
+            .landing-heading {
+                font-size: 2.2em;
+                margin-bottom: 20px;
+                white-space: nowrap;
+            }
+
+            .landing-subheading {
+                font-size: 1.2em;
+                margin-bottom: 36px;
+            }
+
+            .landing-cta {
+                padding: 16px 36px;
+                font-size: 1.1em;
+                width: 100%;
+                max-width: 300px;
+            }
+        }
+
+        /* Animation for fade-in effect */
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .landing-logo {
+            animation: fadeIn 0.6s ease-out;
+        }
+
+        .landing-heading {
+            animation: fadeIn 0.8s ease-out;
+        }
+
+        .landing-subheading {
+            animation: fadeIn 1s ease-out;
+        }
+
+        .landing-cta {
+            animation: fadeIn 1.2s ease-out;
+        }
+    </style>
+    <script>
+        // Check if user is already logged in and redirect to app
+        (function() {
+            const savedToken = localStorage.getItem('authToken');
+            if (savedToken) {
+                // Verify token is still valid
+                fetch('/api/auth/me', {
+                    headers: {
+                        'Authorization': `Bearer ${savedToken}`
+                    }
+                })
+                .then(response => {
+                    if (response.ok) {
+                        // User is authenticated, redirect to app
+                        window.location.href = '/index.html';
+                    } else {
+                        // Token invalid, clear it and stay on landing page
+                        localStorage.removeItem('authToken');
+                    }
+                })
+                .catch(error => {
+                    console.error('Auth check error:', error);
+                    localStorage.removeItem('authToken');
+                });
+            }
+        })();
+    </script>
+</head>
+<body>
+    <div class="landing-container">
+        <!-- Logo -->
+        <img src="/vantum-logo.png" alt="Vantum" class="landing-logo" />
+        
+        <!-- Main heading -->
+        <h1 class="landing-heading">Stop building the wrong thing.</h1>
+        
+        <!-- Subheading -->
+        <p class="landing-subheading">Turn your vague ideas into executable plans</p>
+        
+        <!-- CTA Button -->
+        <a href="/login.html" class="landing-cta">Generate my plan</a>
+    </div>
+</body>
+</html>

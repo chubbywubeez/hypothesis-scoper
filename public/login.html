@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Login - Hypothesis Scoper</title>
+    <title>Login - Execution Plan Builder</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -136,6 +136,25 @@
         .back-link a:hover {
             text-decoration: underline;
         }
+        .password-requirements {
+            margin-bottom: 15px;
+            padding: 12px;
+            background: #0A0E17;
+            border-radius: 6px;
+            border: 1px solid #2A2E39;
+        }
+        .password-requirements li.valid {
+            color: #4CAF50;
+        }
+        .password-requirements li.invalid {
+            color: #A3A6B4;
+        }
+        .form-group input.error {
+            border-color: #ff6b6b;
+        }
+        .form-group input.valid {
+            border-color: #4CAF50;
+        }
     </style>
 </head>
 <body>
@@ -143,8 +162,8 @@
         <div class="login-container">
             <div class="login-header">
                 <img src="/vantum-logo.png" alt="Vantum" class="logo" />
-                <h1>Hypothesis Scoper</h1>
-                <p>Convert ideas → hypotheses → scopes</p>
+                <h1>Action Planner</h1>
+                <p>Turn your idea into a clear plan in 60 seconds.</p>
             </div>
 
             <div class="auth-tabs">
@@ -162,6 +181,19 @@
                 <div class="form-group">
                     <label for="auth-password">Password *</label>
                     <input type="password" id="auth-password" placeholder="Enter your password" required />
+                </div>
+                <div id="password-confirm-group" class="form-group" style="display: none;">
+                    <label for="auth-password-confirm">Confirm Password *</label>
+                    <input type="password" id="auth-password-confirm" placeholder="Confirm your password" />
+                </div>
+                <div id="password-requirements" class="password-requirements" style="display: none;">
+                    <small style="color: #A3A6B4; font-size: 12px; display: block; margin-bottom: 10px;">Password must:</small>
+                    <ul style="color: #A3A6B4; font-size: 12px; margin: 0 0 15px 20px; padding: 0; list-style: none;">
+                        <li id="req-length" style="margin-bottom: 5px;">• At least 8 characters</li>
+                        <li id="req-uppercase" style="margin-bottom: 5px;">• One uppercase letter</li>
+                        <li id="req-lowercase" style="margin-bottom: 5px;">• One lowercase letter</li>
+                        <li id="req-number" style="margin-bottom: 5px;">• One number</li>
+                    </ul>
                 </div>
                 <div id="signup-options-group" class="form-group" style="display: none;">
                     <label style="display: flex; align-items: start; cursor: pointer; font-weight: normal; margin-bottom: 15px;">

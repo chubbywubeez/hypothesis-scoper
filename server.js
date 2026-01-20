@@ -1641,20 +1641,40 @@ async function subscribeToBeehiiv(email, acquisitionDetails = {}) {
       console.warn('Could not fetch tags, will try subscribing with tag name:', tagError.message);
     }
     
+    // Helper: perform the request and return { ok, status, text, json? }
+    async function doBeehiivSubscribeRequest(body) {
+      console.log('Request body:', JSON.stringify(body, null, 2));
+      const response = await fetch(beehiivUrl, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${BEEHIIV_API_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(body)
+      });
+
+      const responseText = await response.text();
+      console.log('Beehiiv API Response Status:', response.status);
+      console.log('Beehiiv API Response:', responseText);
+
+      return { ok: response.ok, status: response.status, text: responseText };
+    }
+
     const requestBody = {
       email: email,
       reactivate_existing: false,
       send_welcome_email: true
     };
     
-    // Add tags - try tag ID first, then tag name
+    // Add tags
+    // IMPORTANT:
+    // - Beehiiv's v2 API expects tag IDs for `tags`.
+    // - Sending a tag NAME (e.g. "beastives") can trigger 400 Bad Request.
     if (tagId) {
       requestBody.tags = [tagId];
       console.log('Using tag ID in request:', tagId);
     } else {
-      // Try using tag name directly - Beehiiv API might accept this
-      requestBody.tags = ['beastives'];
-      console.warn('⚠️ Using tag name "beastives" directly (tag ID lookup failed)');
+      console.warn('⚠️ No Beehiiv tag ID found for "beastives"; subscribing WITHOUT tags to avoid 400 Bad Request');
     }
     
     // Add acquisition details as custom fields for tracking and automation
@@ -1696,32 +1716,38 @@ async function subscribeToBeehiiv(email, acquisitionDetails = {}) {
       console.log('✅ Added acquisition details to Beehiv subscription:', JSON.stringify(requestBody.custom_fields, null, 2));
     }
     
-    console.log('Request body:', JSON.stringify(requestBody, null, 2));
-    
-    const response = await fetch(beehiivUrl, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${BEEHIIV_API_KEY}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify(requestBody)
-    });
-    
-    const responseText = await response.text();
-    console.log('Beehiiv API Response Status:', response.status);
-    console.log('Beehiiv API Response:', responseText);
-    
-    if (!response.ok) {
+    // Attempt 1: send everything (tags if we have ID, plus custom_fields if present)
+    let attemptBody = { ...requestBody };
+    let result = await doBeehiivSubscribeRequest(attemptBody);
+
+    // If Beehiiv rejects (400), progressively remove likely-problematic fields and retry.
+    // Why: Beehiiv often rejects unknown `custom_fields` (if not created in the publication),
+    // and rejects tag NAMEs (we already avoid names, but keep this generic).
+    if (!result.ok && result.status === 400 && attemptBody.custom_fields) {
+      console.warn('⚠️ Beehiiv returned 400. Retrying WITHOUT custom_fields (they may not exist in Beehiiv yet)...');
+      const { custom_fields, ...withoutCustomFields } = attemptBody;
+      attemptBody = withoutCustomFields;
+      result = await doBeehiivSubscribeRequest(attemptBody);
+    }
+
+    if (!result.ok && result.status === 400 && attemptBody.tags) {
+      console.warn('⚠️ Beehiiv returned 400. Retrying WITHOUT tags...');
+      const { tags, ...withoutTags } = attemptBody;
+      attemptBody = withoutTags;
+      result = await doBeehiivSubscribeRequest(attemptBody);
+    }
+
+    if (!result.ok) {
       let errorData;
       try {
-        errorData = JSON.parse(responseText);
+        errorData = JSON.parse(result.text);
       } catch (e) {
-        errorData = { message: responseText };
+        errorData = { message: result.text };
       }
-      throw new Error(`Beehiiv API error: ${response.status} - ${errorData.message || response.statusText || responseText}`);
+      throw new Error(`Beehiiv API error: ${result.status} - ${errorData.message || result.text}`);
     }
-    
-    const responseData = JSON.parse(responseText);
+
+    const responseData = JSON.parse(result.text);
     const subscriberId = responseData.id || responseData.data?.id;
     
     console.log(`✅ Successfully subscribed ${email} to Beehiiv newsletter`);
@@ -1733,7 +1759,12 @@ async function subscribeToBeehiiv(email, acquisitionDetails = {}) {
       try {
         // Try to update subscriber with tags
         const updateUrl = `https://api.beehiiv.com/v2/publications/${publicationId}/subscriptions/${subscriberId}`;
-        const updateBody = tagId ? { tags: [tagId] } : { tags: ['beastives'] };
+        // IMPORTANT: only send tag IDs here. Do not send tag names.
+        const updateBody = tagId ? { tags: [tagId] } : null;
+        if (!updateBody) {
+          console.warn('⚠️ Skipping tag update because tag ID was not found.');
+          return responseData;
+        }
         
         const updateResponse = await fetch(updateUrl, {
           method: 'PATCH',

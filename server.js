@@ -1596,13 +1596,14 @@ async function subscribeToBeehiiv(email, acquisitionDetails = {}) {
     
     console.log('Calling Beehiiv API:', beehiivUrl);
     
-    // First, get subscriber tags (not content tags) for 'beastives'
-    // Beehiiv has separate endpoints for subscriber tags vs content tags
+    // Get Beehiiv "subscription tags" (NOT content tags).
+    // NOTE: The old `/subscriber_tags` endpoint 404s for many publications.
+    // Beehiiv's docs reference "Subscription Tags" endpoints (create/list/etc).
     let tagId = null;
     try {
-      // Try the subscriber tags endpoint
-      const tagsUrl = `https://api.beehiiv.com/v2/publications/${publicationId}/subscriber_tags`;
-      console.log('Fetching subscriber tags from:', tagsUrl);
+      // Try the subscription tags endpoint (per Beehiiv docs)
+      const tagsUrl = `https://api.beehiiv.com/v2/publications/${publicationId}/subscription_tags`;
+      console.log('Fetching subscription tags from:', tagsUrl);
       
       const tagsResponse = await fetch(tagsUrl, {
         headers: {
@@ -1611,11 +1612,11 @@ async function subscribeToBeehiiv(email, acquisitionDetails = {}) {
         }
       });
       
-      console.log('Tags API Response Status:', tagsResponse.status);
+      console.log('Subscription Tags API Response Status:', tagsResponse.status);
       
       if (tagsResponse.ok) {
         const tagsData = await tagsResponse.json();
-        console.log('Tags API Response Data:', JSON.stringify(tagsData, null, 2));
+        console.log('Subscription Tags API Response Data:', JSON.stringify(tagsData, null, 2));
         
         // Check different possible response structures
         const tagsList = tagsData.data || tagsData.tags || tagsData;
@@ -1635,10 +1636,10 @@ async function subscribeToBeehiiv(email, acquisitionDetails = {}) {
         }
       } else {
         const errorText = await tagsResponse.text();
-        console.warn('Tags API error response:', tagsResponse.status, errorText);
+        console.warn('Subscription Tags API error response:', tagsResponse.status, errorText);
       }
     } catch (tagError) {
-      console.warn('Could not fetch tags, will try subscribing with tag name:', tagError.message);
+      console.warn('Could not fetch subscription tags:', tagError.message);
     }
     
     // Helper: perform the request and return { ok, status, text, json? }
@@ -1668,52 +1669,56 @@ async function subscribeToBeehiiv(email, acquisitionDetails = {}) {
     
     // Add tags
     // IMPORTANT:
-    // - Beehiiv's v2 API expects tag IDs for `tags`.
-    // - Sending a tag NAME (e.g. "beastives") can trigger 400 Bad Request.
+    // - Beehiiv expects tag IDs.
+    // - Different endpoints/fields exist depending on tag type.
+    // - We'll use "Subscription Tags" and attach them via `subscription_tag_ids`.
     if (tagId) {
-      requestBody.tags = [tagId];
-      console.log('Using tag ID in request:', tagId);
+      requestBody.subscription_tag_ids = [tagId];
+      console.log('Using subscription_tag_ids in request:', tagId);
     } else {
       console.warn('⚠️ No Beehiiv tag ID found for "beastives"; subscribing WITHOUT tags to avoid 400 Bad Request');
     }
     
-    // Add acquisition details as custom fields for tracking and automation
-    // Beehiv API v2 supports custom_fields object
+    // Add acquisition details.
+    // IMPORTANT: Beehiiv's API expects `custom_fields` to be an ARRAY, not an object.
+    // Your logs confirmed: "custom_fields expected array, but received hash".
     if (Object.keys(acquisitionDetails).length > 0) {
-      requestBody.custom_fields = {};
+      requestBody.custom_fields = [];
       
       // Map common acquisition fields
       if (acquisitionDetails.source) {
-        requestBody.custom_fields.acquisition_source = acquisitionDetails.source;
+        requestBody.custom_fields.push({ name: 'acquisition_source', value: String(acquisitionDetails.source) });
       }
       if (acquisitionDetails.utm_source) {
-        requestBody.custom_fields.utm_source = acquisitionDetails.utm_source;
+        requestBody.custom_fields.push({ name: 'utm_source', value: String(acquisitionDetails.utm_source) });
       }
       if (acquisitionDetails.utm_medium) {
-        requestBody.custom_fields.utm_medium = acquisitionDetails.utm_medium;
+        requestBody.custom_fields.push({ name: 'utm_medium', value: String(acquisitionDetails.utm_medium) });
       }
       if (acquisitionDetails.utm_campaign) {
-        requestBody.custom_fields.utm_campaign = acquisitionDetails.utm_campaign;
+        requestBody.custom_fields.push({ name: 'utm_campaign', value: String(acquisitionDetails.utm_campaign) });
       }
       if (acquisitionDetails.utm_term) {
-        requestBody.custom_fields.utm_term = acquisitionDetails.utm_term;
+        requestBody.custom_fields.push({ name: 'utm_term', value: String(acquisitionDetails.utm_term) });
       }
       if (acquisitionDetails.utm_content) {
-        requestBody.custom_fields.utm_content = acquisitionDetails.utm_content;
+        requestBody.custom_fields.push({ name: 'utm_content', value: String(acquisitionDetails.utm_content) });
       }
       if (acquisitionDetails.referrer) {
-        requestBody.custom_fields.referrer = acquisitionDetails.referrer;
+        requestBody.custom_fields.push({ name: 'referrer', value: String(acquisitionDetails.referrer) });
       }
       if (acquisitionDetails.landing_page) {
-        requestBody.custom_fields.landing_page = acquisitionDetails.landing_page;
+        requestBody.custom_fields.push({ name: 'landing_page', value: String(acquisitionDetails.landing_page) });
       }
       
-      // Also try referral_source field (some Beehiv setups use this)
-      if (acquisitionDetails.source) {
-        requestBody.referral_source = acquisitionDetails.source;
-      }
+      // Also set Beehiiv's built-in UTM fields when present.
+      // These show up in Beehiiv UI under acquisition columns.
+      if (acquisitionDetails.utm_source) requestBody.utm_source = String(acquisitionDetails.utm_source);
+      if (acquisitionDetails.utm_medium) requestBody.utm_medium = String(acquisitionDetails.utm_medium);
+      if (acquisitionDetails.utm_campaign) requestBody.utm_campaign = String(acquisitionDetails.utm_campaign);
+      if (acquisitionDetails.referrer) requestBody.referring_site = String(acquisitionDetails.referrer);
       
-      console.log('✅ Added acquisition details to Beehiv subscription:', JSON.stringify(requestBody.custom_fields, null, 2));
+      console.log('✅ Added acquisition details to Beehiiv subscription:', JSON.stringify(requestBody.custom_fields, null, 2));
     }
     
     // Attempt 1: send everything (tags if we have ID, plus custom_fields if present)
@@ -1753,18 +1758,21 @@ async function subscribeToBeehiiv(email, acquisitionDetails = {}) {
     console.log(`✅ Successfully subscribed ${email} to Beehiiv newsletter`);
     console.log('Response data:', JSON.stringify(responseData, null, 2));
     
-    // If tags weren't applied during subscription, try to apply them after
-    if (subscriberId && (!tagId || !responseData.tags || !responseData.tags.includes(tagId))) {
-      console.log('Attempting to apply tags after subscription...');
+    // If tags weren't applied during subscription, try to apply them after.
+    // For Subscription Tags, we patch using `subscription_tag_ids`.
+    if (subscriberId && tagId) {
+      const responseTagIds = responseData.subscription_tag_ids || responseData.data?.subscription_tag_ids || [];
+      const hasTag = Array.isArray(responseTagIds) && responseTagIds.includes(tagId);
+      if (hasTag) {
+        return responseData;
+      }
+
+      console.log('Attempting to apply subscription tag after subscription...');
       try {
         // Try to update subscriber with tags
         const updateUrl = `https://api.beehiiv.com/v2/publications/${publicationId}/subscriptions/${subscriberId}`;
         // IMPORTANT: only send tag IDs here. Do not send tag names.
-        const updateBody = tagId ? { tags: [tagId] } : null;
-        if (!updateBody) {
-          console.warn('⚠️ Skipping tag update because tag ID was not found.');
-          return responseData;
-        }
+        const updateBody = { subscription_tag_ids: [tagId] };
         
         const updateResponse = await fetch(updateUrl, {
           method: 'PATCH',

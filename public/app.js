@@ -1351,6 +1351,16 @@ function openAdvancedModal() {
     
     // Add welcome message from assistant
     addAdvancedWelcomeMessage();
+
+    // If the user already typed an idea in the main textarea, carry it into Advanced Mode
+    const ideaText = ideaInput ? ideaInput.value.trim() : '';
+    if (ideaText) {
+        // Seed the conversation with the user's idea so the assistant starts from it
+        addAdvancedMessage('user', ideaText);
+        // Keep the input empty so they can continue from there without duplicating
+        advancedChatInput.value = '';
+        autoResizeTextarea(advancedChatInput);
+    }
 }
 
 function closeAdvancedModalFunc() {

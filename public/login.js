@@ -3,6 +3,83 @@
 
 let isLoginMode = true;
 
+// Function to capture and store acquisition details (UTM parameters, referrer, etc.)
+// This data will be sent to Beehiv for tracking and automation
+function getAcquisitionDetails() {
+    const params = new URLSearchParams(window.location.search);
+    const details = {};
+    
+    // Capture UTM parameters from URL
+    const utmParams = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content'];
+    utmParams.forEach(param => {
+        const value = params.get(param);
+        if (value) {
+            details[param] = value;
+            // Store in sessionStorage for persistence across page navigations
+            sessionStorage.setItem(param, value);
+        } else {
+            // Check sessionStorage if not in URL (user navigated from landing page)
+            const stored = sessionStorage.getItem(param);
+            if (stored) {
+                details[param] = stored;
+            }
+        }
+    });
+    
+    // Capture referrer (where user came from)
+    if (document.referrer) {
+        details.referrer = document.referrer;
+        sessionStorage.setItem('referrer', document.referrer);
+    } else {
+        const storedReferrer = sessionStorage.getItem('referrer');
+        if (storedReferrer) {
+            details.referrer = storedReferrer;
+        }
+    }
+    
+    // Capture landing page (first page user visited)
+    const landingPage = sessionStorage.getItem('landing_page') || window.location.pathname;
+    if (!sessionStorage.getItem('landing_page')) {
+        sessionStorage.setItem('landing_page', window.location.pathname);
+    }
+    details.landing_page = landingPage;
+    
+    // Determine acquisition source if not set via UTM
+    if (!details.utm_source) {
+        if (document.referrer) {
+            try {
+                const referrerUrl = new URL(document.referrer);
+                const hostname = referrerUrl.hostname;
+                // Set source based on referrer
+                if (hostname.includes('google')) {
+                    details.acquisition_source = 'google';
+                } else if (hostname.includes('facebook') || hostname.includes('instagram')) {
+                    details.acquisition_source = 'facebook';
+                } else if (hostname.includes('twitter') || hostname.includes('x.com')) {
+                    details.acquisition_source = 'twitter';
+                } else if (hostname.includes('linkedin')) {
+                    details.acquisition_source = 'linkedin';
+                } else if (hostname.includes('youtube')) {
+                    details.acquisition_source = 'youtube';
+                } else if (hostname.includes('tiktok')) {
+                    details.acquisition_source = 'tiktok';
+                } else {
+                    details.acquisition_source = 'referral';
+                }
+            } catch (e) {
+                details.acquisition_source = 'direct';
+            }
+        } else {
+            details.acquisition_source = 'direct';
+        }
+    } else {
+        // Use utm_source as acquisition_source
+        details.acquisition_source = details.utm_source;
+    }
+    
+    return details;
+}
+
 // DOM elements
 const loginTab = document.getElementById('login-tab');
 const signupTab = document.getElementById('signup-tab');
@@ -289,6 +366,9 @@ async function handleSignup() {
     authSubmitBtn.textContent = 'Signing up...';
     hideAuthStatus();
     
+    // Capture acquisition details (UTM parameters, referrer, etc.)
+    const acquisitionDetails = getAcquisitionDetails();
+    
     // Prepare request body
     const requestBody = { 
         email, 
@@ -296,7 +376,9 @@ async function handleSignup() {
         role: 'customer',
         terms_accepted: true,
         terms_accepted_at: new Date().toISOString(),
-        newsletter_subscribed: newsletterCheckbox ? newsletterCheckbox.checked : false
+        newsletter_subscribed: newsletterCheckbox ? newsletterCheckbox.checked : false,
+        // Include acquisition details for Beehiv tracking
+        ...acquisitionDetails
     };
     
     console.log('=== FRONTEND REQUEST BODY ===');

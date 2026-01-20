@@ -1567,13 +1567,15 @@ function formatInlineMarkdown(text) {
 }
 
 // Helper function: Subscribe to Beehiiv newsletter
-async function subscribeToBeehiiv(email) {
+// Accepts email and optional acquisition details for tracking
+async function subscribeToBeehiiv(email, acquisitionDetails = {}) {
   // Accept either correctly spelled vars or the previous single‑i versions for backward compatibility
   const BEEHIIV_API_KEY = process.env.BEEHIIV_API_KEY || process.env.BEEHIV_API_KEY;
   const BEEHIIV_PUBLICATION_ID = process.env.BEEHIIV_PUBLICATION_ID || process.env.BEEHIV_PUBLICATION_ID;
   
   console.log('=== Beehiiv Subscription Debug ===');
   console.log('Email:', email);
+  console.log('Acquisition Details:', JSON.stringify(acquisitionDetails, null, 2));
   console.log('Has API Key:', !!BEEHIIV_API_KEY);
   console.log('Has Publication ID:', !!BEEHIIV_PUBLICATION_ID);
   console.log('Publication ID:', BEEHIIV_PUBLICATION_ID ? BEEHIIV_PUBLICATION_ID.substring(0, 20) + '...' : 'NOT SET');
@@ -1653,6 +1655,45 @@ async function subscribeToBeehiiv(email) {
       // Try using tag name directly - Beehiiv API might accept this
       requestBody.tags = ['beastives'];
       console.warn('⚠️ Using tag name "beastives" directly (tag ID lookup failed)');
+    }
+    
+    // Add acquisition details as custom fields for tracking and automation
+    // Beehiv API v2 supports custom_fields object
+    if (Object.keys(acquisitionDetails).length > 0) {
+      requestBody.custom_fields = {};
+      
+      // Map common acquisition fields
+      if (acquisitionDetails.source) {
+        requestBody.custom_fields.acquisition_source = acquisitionDetails.source;
+      }
+      if (acquisitionDetails.utm_source) {
+        requestBody.custom_fields.utm_source = acquisitionDetails.utm_source;
+      }
+      if (acquisitionDetails.utm_medium) {
+        requestBody.custom_fields.utm_medium = acquisitionDetails.utm_medium;
+      }
+      if (acquisitionDetails.utm_campaign) {
+        requestBody.custom_fields.utm_campaign = acquisitionDetails.utm_campaign;
+      }
+      if (acquisitionDetails.utm_term) {
+        requestBody.custom_fields.utm_term = acquisitionDetails.utm_term;
+      }
+      if (acquisitionDetails.utm_content) {
+        requestBody.custom_fields.utm_content = acquisitionDetails.utm_content;
+      }
+      if (acquisitionDetails.referrer) {
+        requestBody.custom_fields.referrer = acquisitionDetails.referrer;
+      }
+      if (acquisitionDetails.landing_page) {
+        requestBody.custom_fields.landing_page = acquisitionDetails.landing_page;
+      }
+      
+      // Also try referral_source field (some Beehiv setups use this)
+      if (acquisitionDetails.source) {
+        requestBody.referral_source = acquisitionDetails.source;
+      }
+      
+      console.log('✅ Added acquisition details to Beehiv subscription:', JSON.stringify(requestBody.custom_fields, null, 2));
     }
     
     console.log('Request body:', JSON.stringify(requestBody, null, 2));
@@ -2199,7 +2240,26 @@ app.post('/api/auth/signup', async (req, res) => {
     if (newsletter_subscribed) {
       console.log(`Newsletter subscription requested for: ${email}`);
       try {
-        await subscribeToBeehiiv(email);
+        // Extract acquisition details from request body
+        const acquisitionDetails = {
+          source: req.body.acquisition_source || req.body.source,
+          utm_source: req.body.utm_source,
+          utm_medium: req.body.utm_medium,
+          utm_campaign: req.body.utm_campaign,
+          utm_term: req.body.utm_term,
+          utm_content: req.body.utm_content,
+          referrer: req.body.referrer,
+          landing_page: req.body.landing_page
+        };
+        
+        // Remove undefined values
+        Object.keys(acquisitionDetails).forEach(key => {
+          if (acquisitionDetails[key] === undefined) {
+            delete acquisitionDetails[key];
+          }
+        });
+        
+        await subscribeToBeehiiv(email, acquisitionDetails);
         console.log(`✅ Newsletter subscription completed for: ${email}`);
       } catch (beehiivError) {
         console.error('❌ Beehiiv subscription failed (signup will continue):', beehiivError.message);

@@ -199,6 +199,28 @@
         }
     </style>
     <script>
+        // Capture acquisition details (UTM parameters, referrer) for Beehiv tracking
+        (function() {
+            const params = new URLSearchParams(window.location.search);
+            const utmParams = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_term', 'utm_content'];
+            
+            // Store UTM parameters in sessionStorage so they persist to login page
+            utmParams.forEach(param => {
+                const value = params.get(param);
+                if (value) {
+                    sessionStorage.setItem(param, value);
+                }
+            });
+            
+            // Store referrer and landing page
+            if (document.referrer) {
+                sessionStorage.setItem('referrer', document.referrer);
+            }
+            if (!sessionStorage.getItem('landing_page')) {
+                sessionStorage.setItem('landing_page', window.location.pathname);
+            }
+        })();
+        
         // Check if user is already logged in and redirect to app
         (function() {
             const savedToken = localStorage.getItem('authToken');

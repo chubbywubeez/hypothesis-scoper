@@ -2799,8 +2799,10 @@ app.post('/api/stripe/create-checkout-session', async (req, res) => {
         },
       ],
       mode: 'subscription',
-      success_url: `${baseUrl}/?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${baseUrl}/?canceled=true`,
+      // Send users back into the app (not the landing page) after checkout.
+      // We keep `session_id` so the frontend can sync subscription immediately.
+      success_url: `${baseUrl}/index.html?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${baseUrl}/index.html?canceled=true`,
       metadata: {
         userId: user.id,
       },

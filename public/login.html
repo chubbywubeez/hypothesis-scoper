@@ -11,6 +11,11 @@
     <base href="/">
     <link rel="stylesheet" href="styles.css">
     <style>
+        /* Accessibility: Set base font size to 16px minimum for mobile accessibility */
+        html {
+            font-size: 16px; /* Prevents iOS zoom on input focus, ensures readable base size */
+        }
+        
         .login-container {
             max-width: 400px;
             margin: 100px auto;
@@ -18,6 +23,32 @@
             background: #1A1E29;
             border-radius: 8px;
             border: 1px solid #2A2E39;
+        }
+        
+        /* Mobile responsive styles for accessibility */
+        @media (max-width: 768px) {
+            .login-container {
+                margin: 40px auto;
+                padding: 30px 20px;
+                max-width: calc(100% - 40px);
+            }
+            
+            .login-header h1 {
+                font-size: 1.75em; /* 28px at 16px base - readable heading */
+            }
+            
+            .login-header p {
+                font-size: 1em; /* 16px - accessible body text */
+            }
+            
+            .form-group label {
+                font-size: 1em; /* 16px - accessible label text */
+            }
+            
+            .auth-submit-btn {
+                font-size: 1em; /* 16px - accessible button text */
+                padding: 14px; /* Better touch target */
+            }
         }
         .login-header {
             text-align: center;
@@ -75,7 +106,7 @@
             border: 1px solid #2A2E39;
             border-radius: 6px;
             color: #FFFFFF;
-            font-size: 14px;
+            font-size: 16px; /* Accessibility: Minimum 16px to prevent iOS zoom */
             box-sizing: border-box;
         }
         .form-group input:focus {

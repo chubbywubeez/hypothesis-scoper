@@ -11,6 +11,11 @@
     <base href="/">
     <link rel="stylesheet" href="styles.css">
     <style>
+        /* Accessibility: Set base font size to 16px minimum for mobile accessibility */
+        html {
+            font-size: 16px; /* Prevents iOS zoom on input focus, ensures readable base size */
+        }
+        
         /* Landing page specific styles */
         .landing-container {
             min-height: 100vh;
@@ -107,19 +112,22 @@
                 margin-bottom: 30px;
             }
 
+            /* Accessibility: Larger heading for mobile readability */
             .landing-heading {
-                font-size: 2.2em;
+                font-size: 2.5em;
                 margin-bottom: 20px;
             }
 
+            /* Accessibility: Ensure subheading is at least 16px (1em base) */
             .landing-subheading {
-                font-size: 1.2em;
+                font-size: 1.25em; /* 20px at default 16px base */
                 margin-bottom: 36px;
             }
 
+            /* Accessibility: Button text should be readable */
             .landing-cta {
                 padding: 16px 36px;
-                font-size: 1.1em;
+                font-size: 1.125em; /* 18px at default 16px base */
                 width: 100%;
                 max-width: 300px;
             }
@@ -137,23 +145,26 @@
                 margin-bottom: 24px;
             }
 
+            /* Accessibility: Maintain readable heading size */
             .landing-heading {
-                font-size: 1.8em;
+                font-size: 2em; /* 32px at default 16px base */
                 margin-bottom: 16px;
                 line-height: 1.3;
                 padding: 0 10px;
             }
 
+            /* Accessibility: Ensure subheading meets minimum readable size */
             .landing-subheading {
-                font-size: 1.1em;
+                font-size: 1.125em; /* 18px at default 16px base - above minimum */
                 margin-bottom: 32px;
                 padding: 0 10px;
-                line-height: 1.4;
+                line-height: 1.5; /* Better line spacing for readability */
             }
 
+            /* Accessibility: Button text should be at least 16px */
             .landing-cta {
-                padding: 14px 28px;
-                font-size: 1em;
+                padding: 16px 28px; /* Increased padding for better touch target */
+                font-size: 1em; /* 16px - minimum accessible size */
                 width: calc(100% - 24px);
                 max-width: none;
             }

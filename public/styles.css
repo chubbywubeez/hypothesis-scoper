@@ -10,6 +10,7 @@ html {
     overflow-x: hidden;
     width: 100%;
     position: relative;
+    font-size: 16px; /* Accessibility: Base font size prevents iOS zoom on input focus */
 }
 
 body {
@@ -144,7 +145,7 @@ header h1 {
     }
     
     .card h2 {
-        font-size: 1.2em;
+        font-size: 1.375em; /* 22px at 16px base - accessible heading */
         margin-bottom: 15px;
     }
 }
@@ -171,11 +172,12 @@ header h1 {
     }
     
     .section-header h2 {
-        font-size: 1.2em;
+        font-size: 1.375em; /* 22px at 16px base - accessible heading */
     }
     
     .section-header .btn-small {
         width: 100%;
+        font-size: 14px; /* Accessibility: Ensure button text is readable */
     }
 }
 
@@ -190,7 +192,7 @@ textarea {
     padding: 15px;
     border: 2px solid #A3A6B4; /* Vantum Light Gray border */
     border-radius: 4px;
-    font-size: 14px;
+    font-size: 16px; /* Accessibility: Minimum 16px to prevent iOS zoom */
     font-family: inherit;
     resize: vertical;
     margin-bottom: 15px;
@@ -220,8 +222,8 @@ textarea:focus {
 @media (max-width: 768px) {
     .btn {
         width: 100%;
-        padding: 14px 24px;
-        font-size: 16px;
+        padding: 14px 24px; /* Better touch target for mobile */
+        font-size: 16px; /* Accessibility: Minimum readable size */
     }
 }
 
@@ -315,7 +317,7 @@ textarea:focus {
 @media (max-width: 768px) {
     .output {
         padding: 15px;
-        font-size: 12px;
+        font-size: 14px; /* Accessibility: Increased from 12px to 14px for better readability */
         max-height: 400px;
     }
 }
@@ -663,7 +665,7 @@ textarea:focus {
 @media (max-width: 768px) {
     .hypothesis-output {
         padding: 20px;
-        font-size: 13px;
+        font-size: 14px; /* Accessibility: Increased from 13px to 14px for better readability */
         min-height: 300px;
         max-height: 500px;
     }
@@ -982,7 +984,7 @@ textarea:focus {
     padding: 12px 16px;
     border: none;
     border-radius: 20px;
-    font-size: 15px;
+    font-size: 16px; /* Accessibility: Minimum 16px to prevent iOS auto-zoom on focus */
     font-family: inherit;
     resize: none;
     background: transparent;
@@ -1116,13 +1118,18 @@ textarea:focus {
     
     .advanced-message-content {
         max-width: calc(100% - 42px);
-        font-size: 14px;
+        font-size: 15px; /* Accessibility: Increased from 14px for better readability */
         padding: 12px 16px;
     }
     
     .advanced-chat-input-container {
         padding: 12px 16px 20px 16px;
         max-width: 100%;
+    }
+    
+    /* Accessibility: Ensure input font-size is 16px on mobile to prevent auto-zoom */
+    .advanced-chat-input {
+        font-size: 16px !important; /* Prevents iOS auto-zoom on focus */
     }
     
     .advanced-generate-btn {

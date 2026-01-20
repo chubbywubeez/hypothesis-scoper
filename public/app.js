@@ -1355,11 +1355,19 @@ function openAdvancedModal() {
     // If the user already typed an idea in the main textarea, carry it into Advanced Mode
     const ideaText = ideaInput ? ideaInput.value.trim() : '';
     if (ideaText) {
-        // Seed the conversation with the user's idea so the assistant starts from it
-        addAdvancedMessage('user', ideaText);
-        // Keep the input empty so they can continue from there without duplicating
-        advancedChatInput.value = '';
+        // Put the text into the advanced input and auto-send it so the assistant responds.
+        // IMPORTANT: We use the same send path (`sendAdvancedMessage`) so it triggers the API call.
+        advancedChatInput.value = ideaText;
         autoResizeTextarea(advancedChatInput);
+        advancedSendBtn.disabled = false;
+
+        // Small delay so the modal renders before we start the API call.
+        setTimeout(() => {
+            // Guard: only send if modal is still open and the input still has the idea text.
+            if (advancedModal.style.display !== 'none' && advancedChatInput.value.trim().length > 0) {
+                sendAdvancedMessage();
+            }
+        }, 150);
     }
 }
 

@@ -178,6 +178,9 @@ app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async
         } else {
             // Update completed without error, verify by reading
             console.log('✅ Update completed without error, verifying...');
+            console.log('Expected dbStatus:', dbStatus);
+            console.log('Expected subscription_id:', subscriptionId);
+            
             const { data: verifyData, error: verifyError } = await supabase
               .from('profiles')
               .select('id, email, subscription_status, subscription_id, subscription_updated_at')
@@ -186,13 +189,21 @@ app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async
             
             if (verifyError) {
               console.error('❌ Error reading updated row:', verifyError);
-            } else if (verifyData && verifyData.subscription_status === 'active' && verifyData.subscription_id === subscriptionId) {
-          console.log(`✅ Subscription activated for user: ${userId}`);
-              console.log('Updated profile:', JSON.stringify(verifyData, null, 2));
+            } else if (verifyData) {
+              console.log('✅ Verification read successful');
+              console.log('Actual subscription_status:', verifyData.subscription_status);
+              console.log('Actual subscription_id:', verifyData.subscription_id);
+              
+              if (verifyData.subscription_status === dbStatus && verifyData.subscription_id === subscriptionId) {
+                console.log(`✅ Subscription activated for user: ${userId}`);
+                console.log('Updated profile:', JSON.stringify(verifyData, null, 2));
+              } else {
+                console.warn('⚠️ Update may not have worked - values do not match');
+                console.warn('Expected status:', dbStatus, 'Got:', verifyData.subscription_status);
+                console.warn('Expected subscription_id:', subscriptionId, 'Got:', verifyData.subscription_id);
+              }
             } else {
-              console.warn('⚠️ Update may not have worked - values do not match');
-              console.warn('Expected status: active, Got:', verifyData?.subscription_status);
-              console.warn('Expected subscription_id:', subscriptionId, 'Got:', verifyData?.subscription_id);
+              console.error('❌ Verification returned no data - RLS may be blocking select');
             }
           }
         }

@@ -188,6 +188,28 @@
         .form-group input.valid {
             border-color: #4CAF50;
         }
+        .password-toggle-btn {
+            position: absolute;
+            right: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: transparent;
+            border: none;
+            color: #A3A6B4;
+            cursor: pointer;
+            padding: 4px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: color 0.2s;
+        }
+        .password-toggle-btn:hover {
+            color: #FFFFFF;
+        }
+        .password-toggle-btn svg {
+            width: 20px;
+            height: 20px;
+        }
     </style>
 </head>
 <body>
@@ -213,11 +235,42 @@
                 </div>
                 <div class="form-group">
                     <label for="auth-password">Password *</label>
-                    <input type="password" id="auth-password" placeholder="Enter your password" required />
+                    <div style="position: relative;">
+                        <input type="password" id="auth-password" placeholder="Enter your password" required style="padding-right: 45px;" />
+                        <button type="button" id="toggle-password" class="password-toggle-btn" aria-label="Show password">
+                            <svg id="eye-icon" width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" style="display: block;">
+                                <path d="M10 4C6 4 3.73 7.11 2.5 9.5C3.73 11.89 6 15 10 15C14 15 16.27 11.89 17.5 9.5C16.27 7.11 14 4 10 4ZM10 12.5C8.07 12.5 6.5 10.93 6.5 9C6.5 7.07 8.07 5.5 10 5.5C11.93 5.5 13.5 7.07 13.5 9C13.5 10.93 11.93 12.5 10 12.5ZM10 7C8.9 7 8 7.9 8 9C8 10.1 8.9 11 10 11C11.1 11 12 10.1 12 9C12 7.9 11.1 7 10 7Z" fill="currentColor"/>
+                            </svg>
+                            <svg id="eye-off-icon" width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" style="display: none;">
+                                <path d="M2.5 2.5L17.5 17.5M8.5 8.5C8.19 8.82 8 9.24 8 9.5C8 10.6 8.9 11.5 10 11.5C10.26 11.5 10.68 11.31 11 11M14.5 14.5C13.27 15.89 11 19 7 19C3 19 0.73 15.89 -0.5 13.5C0.23 12.73 0.73 11.5 1.5 10.5M6.5 6.5C5.27 5.11 3 2 7 2C11 2 13.27 5.11 14.5 7.5C13.77 8.27 13.27 9.5 12.5 10.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                            </svg>
+                        </button>
+                    </div>
                 </div>
                 <div id="password-confirm-group" class="form-group" style="display: none;">
                     <label for="auth-password-confirm">Confirm Password *</label>
-                    <input type="password" id="auth-password-confirm" placeholder="Confirm your password" />
+                    <div style="position: relative;">
+                        <input type="password" id="auth-password-confirm" placeholder="Confirm your password" style="padding-right: 45px;" />
+                        <button type="button" id="toggle-password-confirm" class="password-toggle-btn" aria-label="Show password">
+                            <svg id="eye-icon-confirm" width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" style="display: block;">
+                                <path d="M10 4C6 4 3.73 7.11 2.5 9.5C3.73 11.89 6 15 10 15C14 15 16.27 11.89 17.5 9.5C16.27 7.11 14 4 10 4ZM10 12.5C8.07 12.5 6.5 10.93 6.5 9C6.5 7.07 8.07 5.5 10 5.5C11.93 5.5 13.5 7.07 13.5 9C13.5 10.93 11.93 12.5 10 12.5ZM10 7C8.9 7 8 7.9 8 9C8 10.1 8.9 11 10 11C11.1 11 12 10.1 12 9C12 7.9 11.1 7 10 7Z" fill="currentColor"/>
+                            </svg>
+                            <svg id="eye-off-icon-confirm" width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg" style="display: none;">
+                                <path d="M2.5 2.5L17.5 17.5M8.5 8.5C8.19 8.82 8 9.24 8 9.5C8 10.6 8.9 11.5 10 11.5C10.26 11.5 10.68 11.31 11 11M14.5 14.5C13.27 15.89 11 19 7 19C3 19 0.73 15.89 -0.5 13.5C0.23 12.73 0.73 11.5 1.5 10.5M6.5 6.5C5.27 5.11 3 2 7 2C11 2 13.27 5.11 14.5 7.5C13.77 8.27 13.27 9.5 12.5 10.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+                <div id="forgot-password-link" style="text-align: right; margin-top: -15px; margin-bottom: 15px; display: none;">
+                    <a href="#" id="forgot-password-btn" style="color: #3498db; text-decoration: none; font-size: 14px;">Forgot password?</a>
+                </div>
+                <div id="forgot-password-form" style="display: none;">
+                    <div class="form-group">
+                        <label for="forgot-email">Email *</label>
+                        <input type="email" id="forgot-email" placeholder="your.email@example.com" />
+                    </div>
+                    <button type="button" id="send-reset-btn" class="auth-submit-btn">Send Reset Link</button>
+                    <button type="button" id="back-to-login-btn" class="auth-submit-btn" style="background: #2A2E39; margin-top: 10px;">Back to Login</button>
                 </div>
                 <div id="password-requirements" class="password-requirements" style="display: none;">
                     <small style="color: #A3A6B4; font-size: 12px; display: block; margin-bottom: 10px;">Password must:</small>

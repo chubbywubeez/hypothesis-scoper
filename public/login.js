@@ -141,6 +141,11 @@ function switchAuthMode(isLogin) {
         if (passwordConfirmGroup) {
             passwordConfirmGroup.style.display = 'block';
         }
+        // Hide forgot password link in signup mode
+        const forgotPasswordLink = document.getElementById('forgot-password-link');
+        if (forgotPasswordLink) {
+            forgotPasswordLink.style.display = 'none';
+        }
         // Don't show requirements by default - only show when password is invalid
         if (passwordRequirements) {
             passwordRequirements.style.display = 'none';
@@ -475,3 +480,101 @@ authPassword.addEventListener('keypress', (e) => {
         authForm.dispatchEvent(new Event('submit'));
     }
 });
+
+// Password toggle functionality
+const togglePasswordBtn = document.getElementById('toggle-password');
+const togglePasswordConfirmBtn = document.getElementById('toggle-password-confirm');
+const eyeIcon = document.getElementById('eye-icon');
+const eyeOffIcon = document.getElementById('eye-off-icon');
+const eyeIconConfirm = document.getElementById('eye-icon-confirm');
+const eyeOffIconConfirm = document.getElementById('eye-off-icon-confirm');
+
+if (togglePasswordBtn && authPassword) {
+    togglePasswordBtn.addEventListener('click', () => {
+        const isPassword = authPassword.type === 'password';
+        authPassword.type = isPassword ? 'text' : 'password';
+        if (eyeIcon) eyeIcon.style.display = isPassword ? 'none' : 'block';
+        if (eyeOffIcon) eyeOffIcon.style.display = isPassword ? 'block' : 'none';
+    });
+}
+
+if (togglePasswordConfirmBtn && authPasswordConfirm) {
+    togglePasswordConfirmBtn.addEventListener('click', () => {
+        const isPassword = authPasswordConfirm.type === 'password';
+        authPasswordConfirm.type = isPassword ? 'text' : 'password';
+        if (eyeIconConfirm) eyeIconConfirm.style.display = isPassword ? 'none' : 'block';
+        if (eyeOffIconConfirm) eyeOffIconConfirm.style.display = isPassword ? 'block' : 'none';
+    });
+}
+
+// Forgot password functionality
+const forgotPasswordBtn = document.getElementById('forgot-password-btn');
+const forgotPasswordForm = document.getElementById('forgot-password-form');
+const authFormElement = document.getElementById('auth-form');
+const backToLoginBtn = document.getElementById('back-to-login-btn');
+const sendResetBtn = document.getElementById('send-reset-btn');
+const forgotEmail = document.getElementById('forgot-email');
+
+if (forgotPasswordBtn) {
+    forgotPasswordBtn.addEventListener('click', (e) => {
+        e.preventDefault();
+        authFormElement.style.display = 'none';
+        forgotPasswordForm.style.display = 'block';
+        document.getElementById('forgot-password-link').style.display = 'none';
+    });
+}
+
+if (backToLoginBtn) {
+    backToLoginBtn.addEventListener('click', () => {
+        forgotPasswordForm.style.display = 'none';
+        authFormElement.style.display = 'block';
+        document.getElementById('forgot-password-link').style.display = 'block';
+        if (forgotEmail) forgotEmail.value = '';
+    });
+}
+
+if (sendResetBtn && forgotEmail) {
+    sendResetBtn.addEventListener('click', async () => {
+        const email = forgotEmail.value.trim();
+        
+        if (!email) {
+            showAuthStatus('Please enter your email address', 'error');
+            return;
+        }
+        
+        sendResetBtn.disabled = true;
+        sendResetBtn.textContent = 'Sending...';
+        hideAuthStatus();
+        
+        try {
+            const response = await fetch('/api/auth/forgot-password', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ email })
+            });
+            
+            const data = await response.json();
+            
+            if (!response.ok) {
+                throw new Error(data.error || 'Failed to send reset email');
+            }
+            
+            showAuthStatus('Password reset link sent! Check your email.', 'success');
+            setTimeout(() => {
+                forgotPasswordForm.style.display = 'none';
+                authFormElement.style.display = 'block';
+                document.getElementById('forgot-password-link').style.display = 'block';
+                forgotEmail.value = '';
+            }, 3000);
+            
+        } catch (error) {
+            console.error('Forgot password error:', error);
+            showAuthStatus(error.message || 'Failed to send reset email. Please try again.', 'error');
+        } finally {
+            sendResetBtn.disabled = false;
+            sendResetBtn.textContent = 'Send Reset Link';
+        }
+    });
+}

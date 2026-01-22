@@ -2150,6 +2150,8 @@ async function autoSaveConversation() {
             currentConversationId = data.conversation.id;
             // Refresh conversations list to show updated title/timestamp
             await loadConversations();
+            // Update sidebar to remove "New chat" indicator and show actual conversation
+            renderConversationsList();
         } else {
             const errorData = await response.json().catch(() => ({}));
             console.error('Failed to save conversation:', errorData.error || 'Unknown error');

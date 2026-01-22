@@ -1645,6 +1645,9 @@ async function sendAdvancedMessage() {
     // Add user message to chat
     addAdvancedMessage('user', message);
     
+    // Update sidebar to show "New chat" indicator if starting a new conversation
+    renderConversationsList();
+    
     // Auto-save conversation after user sends message
     await autoSaveConversation();
     
@@ -1998,7 +2001,22 @@ function renderConversationsList() {
     
     conversationsList.innerHTML = '';
     
-    if (allConversations.length === 0) {
+    // Show "New chat" indicator if no conversation is active
+    if (currentConversationId === null && advancedConversationHistory.length > 0) {
+        const newChatItem = document.createElement('div');
+        newChatItem.className = 'conversation-item active';
+        newChatItem.style.opacity = '0.7';
+        
+        const title = document.createElement('div');
+        title.className = 'conversation-item-title';
+        title.textContent = 'New chat';
+        title.style.fontStyle = 'italic';
+        
+        newChatItem.appendChild(title);
+        conversationsList.appendChild(newChatItem);
+    }
+    
+    if (allConversations.length === 0 && currentConversationId === null && advancedConversationHistory.length === 0) {
         const emptyMsg = document.createElement('div');
         emptyMsg.style.padding = '16px';
         emptyMsg.style.color = '#A3A6B4';

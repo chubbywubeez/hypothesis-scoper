@@ -740,6 +740,14 @@ textarea:focus {
     transform: translateX(-100%);
     width: 0;
     border-right: none;
+    overflow: hidden;
+}
+
+/* Hide sidebar content when sidebar is hidden */
+.advanced-sidebar.hidden .advanced-sidebar-header,
+.advanced-sidebar.hidden .advanced-sidebar-list {
+    opacity: 0;
+    pointer-events: none;
 }
 
 .advanced-sidebar-header {
@@ -848,13 +856,13 @@ textarea:focus {
     border: 1px solid #2A2E39;
     color: #A3A6B4;
     cursor: pointer;
-    padding: 8px;
-    width: 32px;
-    height: 48px;
+    padding: 0;
+    width: 40px;
+    height: 40px;
     display: flex;
     align-items: center;
     justify-content: center;
-    border-radius: 0 8px 8px 0;
+    border-radius: 50%;
     transition: all 0.3s ease;
     backdrop-filter: blur(10px);
 }
@@ -866,14 +874,26 @@ textarea:focus {
 }
 
 .advanced-sidebar-toggle-btn-middle svg {
-    width: 16px;
-    height: 16px;
+    width: 18px;
+    height: 18px;
 }
 
-/* When sidebar is hidden, move arrow to left edge */
+/* When sidebar is hidden, move arrow to left edge and make more visible */
 .advanced-sidebar.hidden ~ .advanced-sidebar-toggle-btn-middle {
     left: 0;
-    border-radius: 0 8px 8px 0;
+    transform: translateY(-50%) translateX(-50%);
+    background: rgba(42, 46, 57, 1);
+    border-color: #007A7A;
+    color: #FFFFFF;
+}
+
+.advanced-sidebar.hidden ~ .advanced-sidebar-toggle-btn-middle svg {
+    width: 20px;
+    height: 20px;
+}
+
+.advanced-sidebar.hidden ~ .advanced-sidebar-toggle-btn-middle svg path {
+    stroke-width: 2.5;
 }
 
 /* Main chat area */

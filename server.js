@@ -330,7 +330,8 @@ app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async
                 
                 if (emailProfiles && emailProfiles.length > 0) {
                   const userId = emailProfiles[0].id;
-                  const status = subscription.status === 'active' ? 'active' : 'inactive';
+                  // Map Stripe status: 'trialing' or 'active' both grant access
+                  const status = (subscription.status === 'trialing' || subscription.status === 'active') ? 'active' : 'inactive';
                   
                   console.log(`✅ Found user by email: ${userId}`);
                   console.log(`Current subscription_id in DB: ${emailProfiles[0].subscription_id || 'NULL'}`);
@@ -418,7 +419,8 @@ app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async
                         console.log(`✅ Found user in auth.users: ${matchingUser.id}`);
                         console.log('Creating profile for this user...');
                         
-                        const status = subscription.status === 'active' ? 'active' : 'inactive';
+                        // Map Stripe status: 'trialing' or 'active' both grant access
+                        const status = (subscription.status === 'trialing' || subscription.status === 'active') ? 'active' : 'inactive';
                         const profileData = {
                           id: matchingUser.id,
                           email: customerEmail,
@@ -2713,7 +2715,11 @@ app.post('/api/subscription/sync', async (req, res) => {
     }
     
     // Update profile with subscription info
-    const status = subscription.status === 'active' ? 'active' : 'inactive';
+    // Map Stripe status: 'trialing' or 'active' both grant access
+    const status = (subscription.status === 'trialing' || subscription.status === 'active') ? 'active' : 'inactive';
+    console.log('Subscription status from Stripe:', subscription.status);
+    console.log('Mapped to db status:', status);
+    
     const { data: updatedProfile, error: updateError } = await supabase
       .from('profiles')
       .update({

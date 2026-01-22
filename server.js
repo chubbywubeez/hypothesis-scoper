@@ -2207,13 +2207,14 @@ app.post('/api/auth/signup', async (req, res) => {
       userId = authData.user.id;
     }
     
-    // Create profile with role and terms acceptance
+    // Create profile with role, terms acceptance, and 3-day trial
     const profileData = {
       id: userId,
       email: email,
       role: role === 'internal' ? 'internal' : 'customer', // Only allow setting internal role if explicitly requested
       terms_accepted: true,
-      terms_accepted_at: new Date().toISOString()
+      terms_accepted_at: new Date().toISOString(),
+      trial_started_at: new Date().toISOString() // Start 3-day free trial
     };
     
     console.log('Creating profile in database...');
@@ -2543,15 +2544,26 @@ app.get('/api/subscription/status', async (req, res) => {
       return res.status(401).json({ error: 'Invalid or expired token' });
     }
     
-    // Get profile with subscription info
+    // Get profile with subscription info and trial info
     const { data: profile } = await supabase
       .from('profiles')
-      .select('role, subscription_status, subscription_id')
+      .select('role, subscription_status, subscription_id, trial_started_at')
       .eq('id', user.id)
       .single();
     
     // Internal users always have access
-    const hasAccess = profile?.role === 'internal' || profile?.subscription_status === 'active';
+    let hasAccess = profile?.role === 'internal' || profile?.subscription_status === 'active';
+    
+    // Check if user is within 3-day trial period
+    if (!hasAccess && profile?.trial_started_at) {
+      const trialStart = new Date(profile.trial_started_at);
+      const now = new Date();
+      const daysSinceTrialStart = (now - trialStart) / (1000 * 60 * 60 * 24); // Convert to days
+      
+      if (daysSinceTrialStart <= 3) {
+        hasAccess = true; // Grant access during 3-day trial
+      }
+    }
     
     res.json({
       hasAccess,

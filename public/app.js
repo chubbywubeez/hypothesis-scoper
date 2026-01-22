@@ -1423,9 +1423,18 @@ if (paymentCancelBtn) {
     paymentCancelBtn.addEventListener('click', closePaymentModalFunc);
 }
 
+// Trial button - starts 3-day free trial
+const paymentTrialBtn = document.getElementById('payment-trial-btn');
+if (paymentTrialBtn) {
+    paymentTrialBtn.addEventListener('click', () => {
+        createCheckoutSession(true); // true = trial
+    });
+}
+
+// Upgrade button - pay immediately
 if (paymentUpgradeBtn) {
     paymentUpgradeBtn.addEventListener('click', () => {
-        createCheckoutSession();
+        createCheckoutSession(false); // false = no trial
     });
 }
 

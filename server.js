@@ -3279,6 +3279,229 @@ app.delete('/api/scopes/:id', async (req, res) => {
   }
 });
 
+// ============================================
+// SAVE/RETRIEVE CONVERSATION ENDPOINTS (Advanced Mode)
+// ============================================
+
+// Save conversation endpoint (requires authentication)
+app.post('/api/save-conversation', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+    
+    const token = authHeader.substring(7);
+    const { title, conversation, conversation_id } = req.body;
+    
+    if (!title || !conversation || !Array.isArray(conversation)) {
+      return res.status(400).json({ error: 'Title and conversation array are required' });
+    }
+    
+    if (!supabase) {
+      return res.status(500).json({ error: 'Supabase not configured' });
+    }
+    
+    // Verify token and get user
+    const { data: { user }, error: userError } = await supabase.auth.getUser(token);
+    
+    if (userError || !user) {
+      return res.status(401).json({ error: 'Invalid or expired token' });
+    }
+    
+    // If conversation_id provided, update existing; otherwise create new
+    if (conversation_id) {
+      const { data, error } = await supabase
+        .from('saved_conversations')
+        .update({
+          title: title,
+          conversation: conversation,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', conversation_id)
+        .eq('user_id', user.id)
+        .select()
+        .single();
+      
+      if (error) {
+        console.error('Update conversation error:', error);
+        return res.status(500).json({ error: 'Failed to update conversation' });
+      }
+      
+      res.json({
+        success: true,
+        conversation: data,
+        message: 'Conversation updated successfully'
+      });
+    } else {
+      // Create new conversation
+      const { data, error } = await supabase
+        .from('saved_conversations')
+        .insert({
+          user_id: user.id,
+          title: title,
+          conversation: conversation
+        })
+        .select()
+        .single();
+      
+      if (error) {
+        console.error('Save conversation error:', error);
+        return res.status(500).json({ error: 'Failed to save conversation' });
+      }
+      
+      res.json({
+        success: true,
+        conversation: data,
+        message: 'Conversation saved successfully'
+      });
+    }
+    
+  } catch (error) {
+    console.error('Save conversation error:', error);
+    res.status(500).json({ error: 'Failed to save conversation' });
+  }
+});
+
+// Get user's saved conversations (requires authentication)
+app.get('/api/my-conversations', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+    
+    const token = authHeader.substring(7);
+    
+    if (!supabase) {
+      return res.status(500).json({ error: 'Supabase not configured' });
+    }
+    
+    // Verify token and get user
+    const { data: { user }, error: userError } = await supabase.auth.getUser(token);
+    
+    if (userError || !user) {
+      return res.status(401).json({ error: 'Invalid or expired token' });
+    }
+    
+    // Get user's saved conversations
+    const { data, error } = await supabase
+      .from('saved_conversations')
+      .select('id, title, created_at, updated_at')
+      .eq('user_id', user.id)
+      .order('updated_at', { ascending: false });
+    
+    if (error) {
+      console.error('Get conversations error:', error);
+      return res.status(500).json({ error: 'Failed to retrieve conversations' });
+    }
+    
+    res.json({
+      success: true,
+      conversations: data || []
+    });
+    
+  } catch (error) {
+    console.error('Get conversations error:', error);
+    res.status(500).json({ error: 'Failed to retrieve conversations' });
+  }
+});
+
+// Get single conversation by ID (requires authentication)
+app.get('/api/conversations/:id', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+    
+    const token = authHeader.substring(7);
+    const { id } = req.params;
+    
+    if (!supabase) {
+      return res.status(500).json({ error: 'Supabase not configured' });
+    }
+    
+    // Verify token and get user
+    const { data: { user }, error: userError } = await supabase.auth.getUser(token);
+    
+    if (userError || !user) {
+      return res.status(401).json({ error: 'Invalid or expired token' });
+    }
+    
+    // Get conversation (only if it belongs to the user)
+    const { data, error } = await supabase
+      .from('saved_conversations')
+      .select('*')
+      .eq('id', id)
+      .eq('user_id', user.id)
+      .single();
+    
+    if (error) {
+      console.error('Get conversation error:', error);
+      return res.status(500).json({ error: 'Failed to retrieve conversation' });
+    }
+    
+    if (!data) {
+      return res.status(404).json({ error: 'Conversation not found' });
+    }
+    
+    res.json({
+      success: true,
+      conversation: data
+    });
+    
+  } catch (error) {
+    console.error('Get conversation error:', error);
+    res.status(500).json({ error: 'Failed to retrieve conversation' });
+  }
+});
+
+// Delete saved conversation (requires authentication)
+app.delete('/api/conversations/:id', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+    
+    const token = authHeader.substring(7);
+    const { id } = req.params;
+    
+    if (!supabase) {
+      return res.status(500).json({ error: 'Supabase not configured' });
+    }
+    
+    // Verify token and get user
+    const { data: { user }, error: userError } = await supabase.auth.getUser(token);
+    
+    if (userError || !user) {
+      return res.status(401).json({ error: 'Invalid or expired token' });
+    }
+    
+    // Delete conversation (only if it belongs to the user)
+    const { error } = await supabase
+      .from('saved_conversations')
+      .delete()
+      .eq('id', id)
+      .eq('user_id', user.id);
+    
+    if (error) {
+      console.error('Delete conversation error:', error);
+      return res.status(500).json({ error: 'Failed to delete conversation' });
+    }
+    
+    res.json({
+      success: true,
+      message: 'Conversation deleted successfully'
+    });
+    
+  } catch (error) {
+    console.error('Delete conversation error:', error);
+    res.status(500).json({ error: 'Failed to delete conversation' });
+  }
+});
+
 // Health check endpoint
 app.get('/health', (req, res) => {
   res.json({ status: 'ok' });

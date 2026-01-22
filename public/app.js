@@ -449,6 +449,10 @@ const generateFromAdvancedBtn = document.getElementById('generate-from-advanced-
 const advancedChatMessages = document.getElementById('advanced-chat-messages');
 const advancedChatInput = document.getElementById('advanced-chat-input');
 const advancedSendBtn = document.getElementById('advanced-send-btn');
+const advancedSidebar = document.getElementById('advanced-sidebar');
+const conversationsList = document.getElementById('conversations-list');
+const newConversationBtn = document.getElementById('new-conversation-btn');
+const toggleSidebarBtn = document.getElementById('toggle-sidebar-btn');
 
 // Payment Modal elements
 const paymentModal = document.getElementById('payment-modal');
@@ -458,6 +462,8 @@ const paymentUpgradeBtn = document.getElementById('payment-upgrade-btn');
 
 // Store conversation history for advanced mode
 let advancedConversationHistory = [];
+let currentConversationId = null; // Track which conversation is currently loaded
+let allConversations = []; // Store all conversations for sidebar
 
 // Progress bar elements
 const hypothesisProgressBar = document.getElementById('hypothesis-progress-bar');
@@ -1635,6 +1641,9 @@ async function sendAdvancedMessage() {
     // Add user message to chat
     addAdvancedMessage('user', message);
     
+    // Auto-save conversation after user sends message
+    await autoSaveConversation();
+    
     // Clear input
     advancedChatInput.value = '';
     
@@ -1784,6 +1793,9 @@ async function sendAdvancedMessage() {
                             
                             // Add to conversation history
                             advancedConversationHistory.push({ role: 'assistant', content: fullResponse });
+                            
+                            // Auto-save conversation after assistant responds
+                            await autoSaveConversation();
                             
                             // Enable generate button
                             const hasUserMessage = advancedConversationHistory.some(msg => msg.role === 'user');
@@ -1943,6 +1955,241 @@ generateFromAdvancedBtn.addEventListener('click', async () => {
         hypothesisLoading.style.display = 'none';
     }
 });
+
+// ============================================
+// CONVERSATION MANAGEMENT FUNCTIONS
+// ============================================
+
+// Load conversations list for sidebar
+async function loadConversations() {
+    if (!authToken) {
+        return;
+    }
+    
+    const token = await getValidToken();
+    if (!token) {
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/my-conversations', {
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+        
+        if (response.ok) {
+            const data = await response.json();
+            allConversations = data.conversations || [];
+            renderConversationsList();
+        }
+    } catch (error) {
+        console.error('Error loading conversations:', error);
+    }
+}
+
+// Render conversations in sidebar
+function renderConversationsList() {
+    if (!conversationsList) return;
+    
+    conversationsList.innerHTML = '';
+    
+    if (allConversations.length === 0) {
+        const emptyMsg = document.createElement('div');
+        emptyMsg.style.padding = '16px';
+        emptyMsg.style.color = '#A3A6B4';
+        emptyMsg.style.fontSize = '14px';
+        emptyMsg.style.textAlign = 'center';
+        emptyMsg.textContent = 'No conversations yet';
+        conversationsList.appendChild(emptyMsg);
+        return;
+    }
+    
+    allConversations.forEach(conv => {
+        const item = document.createElement('div');
+        item.className = 'conversation-item';
+        if (conv.id === currentConversationId) {
+            item.classList.add('active');
+        }
+        
+        const title = document.createElement('div');
+        title.className = 'conversation-item-title';
+        title.textContent = conv.title;
+        title.title = conv.title;
+        
+        const deleteBtn = document.createElement('button');
+        deleteBtn.className = 'conversation-item-delete';
+        deleteBtn.title = 'Delete conversation';
+        deleteBtn.innerHTML = '<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M10.5 3.5L3.5 10.5M3.5 3.5L10.5 10.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>';
+        deleteBtn.addEventListener('click', async (e) => {
+            e.stopPropagation();
+            if (confirm('Delete this conversation?')) {
+                await deleteConversation(conv.id);
+            }
+        });
+        
+        item.appendChild(title);
+        item.appendChild(deleteBtn);
+        
+        item.addEventListener('click', () => {
+            loadConversation(conv.id);
+        });
+        
+        conversationsList.appendChild(item);
+    });
+}
+
+// Load a conversation by ID
+async function loadConversation(conversationId) {
+    const token = await getValidToken();
+    if (!token) {
+        showError('Session expired. Please login again.');
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/conversations/${conversationId}`, {
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+        
+        if (!response.ok) {
+            throw new Error('Failed to load conversation');
+        }
+        
+        const data = await response.json();
+        const conversation = data.conversation;
+        
+        // Set current conversation
+        currentConversationId = conversation.id;
+        
+        // Load conversation history
+        advancedConversationHistory = conversation.conversation || [];
+        
+        // Clear and render messages
+        advancedChatMessages.innerHTML = '';
+        
+        // Render all messages from history
+        advancedConversationHistory.forEach(msg => {
+            addAdvancedMessage(msg.role, msg.content);
+        });
+        
+        // Update sidebar to show active conversation
+        renderConversationsList();
+        
+        // Enable generate button if there are user messages
+        const hasUserMessage = advancedConversationHistory.some(msg => msg.role === 'user');
+        generateFromAdvancedBtn.disabled = !hasUserMessage;
+        
+    } catch (error) {
+        console.error('Error loading conversation:', error);
+        showError('Failed to load conversation');
+    }
+}
+
+// Auto-save conversation (called after each message exchange)
+async function autoSaveConversation() {
+    if (advancedConversationHistory.length === 0) {
+        return; // Don't save empty conversations
+    }
+    
+    const token = await getValidToken();
+    if (!token) {
+        return;
+    }
+    
+    // Generate title from first user message
+    const firstUserMessage = advancedConversationHistory.find(msg => msg.role === 'user');
+    const title = firstUserMessage 
+        ? (firstUserMessage.content.substring(0, 50) + (firstUserMessage.content.length > 50 ? '...' : ''))
+        : 'New Conversation';
+    
+    try {
+        const response = await fetch('/api/save-conversation', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify({
+                conversation_id: currentConversationId,
+                title: title,
+                conversation: advancedConversationHistory
+            })
+        });
+        
+        if (response.ok) {
+            const data = await response.json();
+            currentConversationId = data.conversation.id;
+            // Refresh conversations list to show updated title/timestamp
+            await loadConversations();
+        }
+    } catch (error) {
+        console.error('Error auto-saving conversation:', error);
+        // Don't show error to user - auto-save failures are silent
+    }
+}
+
+// Delete conversation
+async function deleteConversation(conversationId) {
+    const token = await getValidToken();
+    if (!token) {
+        showError('Session expired. Please login again.');
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/conversations/${conversationId}`, {
+            method: 'DELETE',
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+        
+        if (response.ok) {
+            // If we deleted the current conversation, start a new one
+            if (conversationId === currentConversationId) {
+                currentConversationId = null;
+                advancedConversationHistory = [];
+                advancedChatMessages.innerHTML = '';
+                addAdvancedWelcomeMessage();
+                generateFromAdvancedBtn.disabled = true;
+            }
+            
+            // Reload conversations list
+            await loadConversations();
+        } else {
+            throw new Error('Failed to delete conversation');
+        }
+    } catch (error) {
+        console.error('Error deleting conversation:', error);
+        showError('Failed to delete conversation');
+    }
+}
+
+// New conversation button handler
+if (newConversationBtn) {
+    newConversationBtn.addEventListener('click', () => {
+        currentConversationId = null;
+        advancedConversationHistory = [];
+        advancedChatMessages.innerHTML = '';
+        addAdvancedWelcomeMessage();
+        generateFromAdvancedBtn.disabled = true;
+        advancedChatInput.value = '';
+        autoResizeTextarea(advancedChatInput);
+        renderConversationsList();
+    });
+}
+
+// Toggle sidebar button handler
+if (toggleSidebarBtn) {
+    toggleSidebarBtn.addEventListener('click', () => {
+        if (advancedSidebar) {
+            advancedSidebar.classList.toggle('hidden');
+        }
+    });
+}
 
 // ============================================
 // SUBSCRIPTION FUNCTIONS

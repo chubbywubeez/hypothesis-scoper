@@ -169,17 +169,39 @@
     <!-- Advanced Mode Modal (Full Screen ChatGPT-like) -->
     <div id="advanced-modal" class="advanced-modal" style="display: none;">
         <div class="advanced-modal-content">
-            <!-- Minimal header with close button -->
-            <div class="advanced-modal-header">
-                <button id="close-advanced-modal" class="advanced-modal-close-btn" title="Close (Esc)">
-                    <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M15 5L5 15M5 5L15 15" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                    </svg>
-                </button>
+            <!-- Sidebar for conversations -->
+            <div id="advanced-sidebar" class="advanced-sidebar">
+                <div class="advanced-sidebar-header">
+                    <button id="new-conversation-btn" class="advanced-sidebar-new-btn" title="New conversation">
+                        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M8 3V13M3 8H13" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                        </svg>
+                        New chat
+                    </button>
+                </div>
+                <div id="conversations-list" class="advanced-sidebar-list">
+                    <!-- Conversations will be loaded here -->
+                </div>
             </div>
             
-            <!-- Chat messages area -->
-            <div id="advanced-chat-messages" class="advanced-chat-messages"></div>
+            <!-- Main chat area -->
+            <div class="advanced-chat-main">
+                <!-- Minimal header with close button -->
+                <div class="advanced-modal-header">
+                    <button id="toggle-sidebar-btn" class="advanced-sidebar-toggle-btn" title="Toggle sidebar">
+                        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M5 5H15M5 10H15M5 15H15" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                        </svg>
+                    </button>
+                    <button id="close-advanced-modal" class="advanced-modal-close-btn" title="Close (Esc)">
+                        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M15 5L5 15M5 5L15 15" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                    </button>
+                </div>
+                
+                <!-- Chat messages area -->
+                <div id="advanced-chat-messages" class="advanced-chat-messages"></div>
             
             <!-- Input container - fixed at bottom -->
             <div class="advanced-chat-input-container">
@@ -199,6 +221,7 @@
                 <button id="generate-from-advanced-btn" class="advanced-generate-btn" disabled>
                     Generate hypothesis
                 </button>
+            </div>
             </div>
         </div>
     </div>

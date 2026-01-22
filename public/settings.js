@@ -85,6 +85,9 @@ async function getValidToken() {
     return authToken;
 }
 
+// Make getValidToken available globally for paywall.js
+window.getValidToken = getValidToken;
+
 // Load user profile and subscription info
 async function loadUserInfo() {
     const token = await getValidToken();
@@ -180,61 +183,23 @@ function updateSubscriptionUI(data) {
 }
 
 // Upgrade/Subscribe to subscription
+// Now uses the shared paywall modal instead of redirecting directly
 async function upgradeSubscription() {
-    const token = await getValidToken();
-    if (!token) {
-        window.location.href = '/login.html';
-        return;
-    }
-    
-    try {
-        subscriptionActionBtn.disabled = true;
-        subscriptionActionBtn.textContent = 'Loading...';
-        
-        // Check if user is on trial - if so, use trial checkout
-        const subscriptionResponse = await fetch('/api/subscription/status', {
-            headers: {
-                'Authorization': `Bearer ${token}`
-            }
-        });
-        
-        let isTrial = false;
-        if (subscriptionResponse.ok) {
-            const data = await subscriptionResponse.json();
-            isTrial = data.isOnTrial || false;
-        }
-        
-        // Create checkout session
-        const response = await fetch(`/api/stripe/create-checkout-session${isTrial ? '?trial=true' : ''}`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`
-            }
-        });
-        
-        const data = await response.json();
-        
-        if (!response.ok) {
-            throw new Error(data.error || 'Failed to create checkout session');
-        }
-        
-        // Redirect to Stripe Checkout
-        if (data.url) {
-            window.location.href = data.url;
-        }
-        
-    } catch (error) {
-        console.error('Upgrade error:', error);
-        showStatus(error.message || 'Failed to start checkout. Please try again.', 'error');
-        subscriptionActionBtn.disabled = false;
-        subscriptionActionBtn.textContent = 'Subscribe';
+    // Open the shared paywall modal
+    if (typeof openPaymentModal === 'function') {
+        openPaymentModal();
+    } else {
+        // Fallback: if paywall.js hasn't loaded, show error
+        showStatus('Payment modal not available. Please refresh the page.', 'error');
     }
 }
 
 // Cancel subscription
 async function cancelSubscription() {
-    if (!confirm('Are you sure you want to cancel your subscription? You will lose access to Advanced Mode at the end of your billing period.')) {
+    // Show confirmation dialog
+    const confirmed = confirm('Are you sure you want to cancel your subscription? You will lose access to Advanced Mode at the end of your billing period.');
+    
+    if (!confirmed) {
         return;
     }
     
@@ -245,35 +210,46 @@ async function cancelSubscription() {
     }
     
     try {
-        subscriptionActionBtn.disabled = true;
-        subscriptionActionBtn.textContent = 'Canceling...';
-        
-        const response = await fetch('/api/subscription/cancel', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token}`
+        // Disable button and show loading state
+        if (subscriptionActionBtn) {
+            subscriptionActionBtn.disabled = true;
+            const originalText = subscriptionActionBtn.textContent;
+            subscriptionActionBtn.textContent = 'Canceling...';
+            
+            const response = await fetch('/api/subscription/cancel', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+            
+            const data = await response.json();
+            
+            if (!response.ok) {
+                throw new Error(data.error || 'Failed to cancel subscription');
             }
-        });
-        
-        const data = await response.json();
-        
-        if (!response.ok) {
-            throw new Error(data.error || 'Failed to cancel subscription');
+            
+            showStatus('Subscription canceled successfully. You will retain access until the end of your billing period.', 'success');
+            
+            // Reload subscription info after a short delay
+            setTimeout(() => {
+                loadUserInfo();
+            }, 2000);
+            
+        } else {
+            throw new Error('Subscription button not found');
         }
-        
-        showStatus('Subscription canceled successfully. You will retain access until the end of your billing period.', 'success');
-        
-        // Reload subscription info
-        setTimeout(() => {
-            loadUserInfo();
-        }, 2000);
         
     } catch (error) {
         console.error('Cancel error:', error);
         showStatus(error.message || 'Failed to cancel subscription. Please try again.', 'error');
-        subscriptionActionBtn.disabled = false;
-        subscriptionActionBtn.textContent = 'Cancel';
+        
+        // Re-enable button on error
+        if (subscriptionActionBtn) {
+            subscriptionActionBtn.disabled = false;
+            subscriptionActionBtn.textContent = 'Cancel';
+        }
     }
 }
 

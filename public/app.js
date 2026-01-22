@@ -76,6 +76,7 @@ async function refreshAccessToken() {
 }
 
 // Get a valid access token, refreshing if necessary
+// Make it available globally for paywall.js
 async function getValidToken() {
     let token = localStorage.getItem('authToken');
     
@@ -93,6 +94,9 @@ async function getValidToken() {
     
     return token;
 }
+
+// Make getValidToken available globally for paywall.js
+window.getValidToken = getValidToken;
 
 // Check authentication on page load - redirect to login if not authenticated
 async function checkAuthOnLoad() {
@@ -1399,51 +1403,9 @@ function closeAdvancedModalFunc() {
     advancedConversationHistory = [];
 }
 
-// Payment Modal functions
-function openPaymentModal() {
-    if (paymentModal) {
-        paymentModal.style.display = 'flex';
-        paymentModal.classList.add('show');
-    }
-}
-
-function closePaymentModalFunc() {
-    if (paymentModal) {
-        paymentModal.style.display = 'none';
-        paymentModal.classList.remove('show');
-    }
-}
-
-// Payment Modal event listeners
-if (closePaymentModal) {
-    closePaymentModal.addEventListener('click', closePaymentModalFunc);
-}
-
-if (paymentCancelBtn) {
-    paymentCancelBtn.addEventListener('click', closePaymentModalFunc);
-}
-
-// Trial button - starts 3-day free trial
-const paymentTrialBtn = document.getElementById('payment-trial-btn');
-if (paymentTrialBtn) {
-    paymentTrialBtn.addEventListener('click', () => {
-        createCheckoutSession(true); // true = trial
-    });
-}
-
-// Upgrade button - pay immediately
-if (paymentUpgradeBtn) {
-    paymentUpgradeBtn.addEventListener('click', () => {
-        createCheckoutSession(false); // false = no trial
-    });
-}
-
-// Close payment modal with Escape key
-document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && paymentModal && paymentModal.style.display !== 'none') {
-        closePaymentModalFunc();
-    }
-});
+// Payment Modal functions are now in paywall.js (shared component)
+// The paywall.js file will use getValidToken() from this file if available
+// openPaymentModal() and closePaymentModalFunc() are defined in paywall.js
 
 function addAdvancedWelcomeMessage() {
     const welcomeMessage = `Share your product idea, feature, or system.
@@ -2400,8 +2362,15 @@ function updateAdvancedModeButton() {
 }
 
 // Create Stripe checkout session
+// createCheckoutSession is now in paywall.js (shared component)
+// This function is kept here for backward compatibility if needed, but paywall.js version is preferred
 async function createCheckoutSession(isTrial = false) {
-    // Get valid token (refresh if needed)
+    // Delegate to paywall.js version if available
+    if (typeof window.createCheckoutSession === 'function' && window.createCheckoutSession !== createCheckoutSession) {
+        return await window.createCheckoutSession(isTrial);
+    }
+    
+    // Fallback implementation (same as paywall.js)
     const token = await getValidToken();
     if (!token) {
         showError('Session expired. Please login again.');

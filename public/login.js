@@ -553,6 +553,13 @@ if (sendResetBtn && forgotEmail) {
             return;
         }
         
+        // Validate email format
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        if (!emailRegex.test(email)) {
+            showAuthStatus('Please enter a valid email address', 'error');
+            return;
+        }
+        
         sendResetBtn.disabled = true;
         sendResetBtn.textContent = 'Sending...';
         hideAuthStatus();
@@ -572,24 +579,41 @@ if (sendResetBtn && forgotEmail) {
                 throw new Error(data.error || 'Failed to send reset email');
             }
             
-            // Show success message with more detail
-            showAuthStatus(data.message || 'Password reset instructions have been sent to your email. Please check your inbox and follow the link to reset your password.', 'success');
-            // Keep the form visible so user can see the message, but clear the email field
+            // Show success message - keep form visible so user can see the message
+            showAuthStatus(data.message || 'If an account exists with this email, a password reset link has been sent. Please check your email inbox and spam folder.', 'success');
+            
+            // Clear the email field
             forgotEmail.value = '';
+            
+            // Disable the button and change text to show it was sent
+            sendResetBtn.textContent = 'Email Sent!';
+            sendResetBtn.style.background = '#2d5016';
+            
             // After 5 seconds, go back to login form
             setTimeout(() => {
                 forgotPasswordForm.style.display = 'none';
                 authFormElement.style.display = 'block';
                 document.getElementById('forgot-password-link').style.display = 'block';
                 hideAuthStatus();
+                // Reset button state
+                sendResetBtn.disabled = false;
+                sendResetBtn.textContent = 'Reset Password';
+                sendResetBtn.style.background = '';
             }, 5000);
             
         } catch (error) {
             console.error('Forgot password error:', error);
             showAuthStatus(error.message || 'Failed to send reset email. Please try again.', 'error');
-        } finally {
             sendResetBtn.disabled = false;
-            sendResetBtn.textContent = 'Send Reset Link';
+            sendResetBtn.textContent = 'Reset Password';
+        }
+    });
+    
+    // Allow Enter key to submit
+    forgotEmail.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            sendResetBtn.click();
         }
     });
 }

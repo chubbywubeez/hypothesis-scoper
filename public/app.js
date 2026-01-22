@@ -1747,16 +1747,20 @@ async function sendAdvancedMessage() {
                         
                         if (data.content) {
                             fullResponse += data.content;
-                            // Use textContent during streaming for security
-                            contentDiv.textContent = fullResponse;
                             
-                            // Smooth scroll during streaming
-                            setTimeout(() => {
-                                advancedChatMessages.scrollTo({
-                                    top: advancedChatMessages.scrollHeight,
-                                    behavior: 'smooth'
+                            // Apply formatting during streaming (not just at the end)
+                            contentDiv.innerHTML = formatMessageContent(fullResponse);
+                            
+                            // Only auto-scroll if user is already near the bottom (within 50px)
+                            // This allows users to scroll up and read at their own pace
+                            const isNearBottom = advancedChatMessages.scrollHeight - advancedChatMessages.scrollTop - advancedChatMessages.clientHeight < 50;
+                            
+                            if (isNearBottom) {
+                                // Use requestAnimationFrame for smoother scrolling
+                                requestAnimationFrame(() => {
+                                    advancedChatMessages.scrollTop = advancedChatMessages.scrollHeight;
                                 });
-                            }, 10);
+                            }
                         }
                         
                         if (data.done) {

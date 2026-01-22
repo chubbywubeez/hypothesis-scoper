@@ -1533,6 +1533,26 @@ textarea:focus {
     background: rgba(255, 255, 255, 0.06);
 }
 
+.payment-offer-cancel {
+    width: 100%;
+    background: transparent;
+    border: none;
+    color: #A3A6B4;
+    text-decoration: underline;
+    padding: 8px;
+    margin-top: 8px;
+}
+
+.payment-offer-cancel:hover {
+    color: #FFFFFF;
+}
+
+.payment-offer-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
 .payment-offer-right {
     padding: 26px;
 }

@@ -2207,14 +2207,13 @@ app.post('/api/auth/signup', async (req, res) => {
       userId = authData.user.id;
     }
     
-    // Create profile with role, terms acceptance, and 3-day trial
+    // Create profile with role and terms acceptance
     const profileData = {
       id: userId,
       email: email,
       role: role === 'internal' ? 'internal' : 'customer', // Only allow setting internal role if explicitly requested
       terms_accepted: true,
-      terms_accepted_at: new Date().toISOString(),
-      trial_started_at: new Date().toISOString() // Start 3-day free trial
+      terms_accepted_at: new Date().toISOString()
     };
     
     console.log('Creating profile in database...');
@@ -2812,7 +2811,10 @@ app.post('/api/stripe/create-checkout-session', async (req, res) => {
     console.log('User email:', profile?.email || user.email);
     console.log('Price ID:', finalPriceId);
     
-    const session = await stripe.checkout.sessions.create({
+    // Check if this is a trial checkout (from query param or request body)
+    const isTrial = req.query.trial === 'true' || req.body.trial === true;
+    
+    const sessionConfig = {
       customer_email: profile?.email || user.email,
       payment_method_types: ['card'],
       line_items: [
@@ -2829,7 +2831,17 @@ app.post('/api/stripe/create-checkout-session', async (req, res) => {
       metadata: {
         userId: user.id,
       },
-    });
+    };
+    
+    // Add 3-day trial period if this is a trial checkout
+    if (isTrial) {
+      sessionConfig.subscription_data = {
+        trial_period_days: 3,
+      };
+      console.log('Creating checkout session with 3-day trial period');
+    }
+    
+    const session = await stripe.checkout.sessions.create(sessionConfig);
     
     console.log('✅ Checkout session created');
     console.log('Session ID:', session.id);

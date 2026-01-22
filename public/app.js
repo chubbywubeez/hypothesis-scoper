@@ -2391,7 +2391,7 @@ function updateAdvancedModeButton() {
 }
 
 // Create Stripe checkout session
-async function createCheckoutSession() {
+async function createCheckoutSession(isTrial = false) {
     // Get valid token (refresh if needed)
     const token = await getValidToken();
     if (!token) {
@@ -2400,7 +2400,7 @@ async function createCheckoutSession() {
     }
     
     try {
-        const response = await fetch('/api/stripe/create-checkout-session', {
+        const response = await fetch(`/api/stripe/create-checkout-session${isTrial ? '?trial=true' : ''}`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',

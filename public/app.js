@@ -1336,11 +1336,15 @@ document.addEventListener('keydown', (e) => {
     }
 });
 
-function openAdvancedModal() {
+async function openAdvancedModal() {
     advancedModal.style.display = 'flex';
     advancedModal.classList.add('show');
     
-    // Reset conversation history
+    // Load conversations list
+    await loadConversations();
+    
+    // Reset conversation history (start fresh)
+    currentConversationId = null;
     advancedConversationHistory = [];
     advancedChatMessages.innerHTML = '';
     generateFromAdvancedBtn.disabled = true;
@@ -2090,8 +2094,12 @@ async function loadConversation(conversationId) {
 
 // Auto-save conversation (called after each message exchange)
 async function autoSaveConversation() {
-    if (advancedConversationHistory.length === 0) {
-        return; // Don't save empty conversations
+    // Only save if we have at least one user message and one assistant message
+    const userMessages = advancedConversationHistory.filter(msg => msg.role === 'user');
+    const assistantMessages = advancedConversationHistory.filter(msg => msg.role === 'assistant');
+    
+    if (userMessages.length === 0 || assistantMessages.length === 0) {
+        return; // Don't save incomplete conversations (wait for assistant response)
     }
     
     const token = await getValidToken();
@@ -2100,7 +2108,7 @@ async function autoSaveConversation() {
     }
     
     // Generate title from first user message
-    const firstUserMessage = advancedConversationHistory.find(msg => msg.role === 'user');
+    const firstUserMessage = userMessages[0];
     const title = firstUserMessage 
         ? (firstUserMessage.content.substring(0, 50) + (firstUserMessage.content.length > 50 ? '...' : ''))
         : 'New Conversation';
@@ -2113,7 +2121,7 @@ async function autoSaveConversation() {
                 'Authorization': `Bearer ${token}`
             },
             body: JSON.stringify({
-                conversation_id: currentConversationId,
+                conversation_id: currentConversationId || null, // null for new conversations
                 title: title,
                 conversation: advancedConversationHistory
             })
@@ -2124,6 +2132,9 @@ async function autoSaveConversation() {
             currentConversationId = data.conversation.id;
             // Refresh conversations list to show updated title/timestamp
             await loadConversations();
+        } else {
+            const errorData = await response.json().catch(() => ({}));
+            console.error('Failed to save conversation:', errorData.error || 'Unknown error');
         }
     } catch (error) {
         console.error('Error auto-saving conversation:', error);
@@ -2168,27 +2179,56 @@ async function deleteConversation(conversationId) {
     }
 }
 
-// New conversation button handler
+// New conversation button handler - creates a fresh conversation
 if (newConversationBtn) {
-    newConversationBtn.addEventListener('click', () => {
+    newConversationBtn.addEventListener('click', async () => {
+        // Clear current conversation state
         currentConversationId = null;
         advancedConversationHistory = [];
+        
+        // Clear chat display
         advancedChatMessages.innerHTML = '';
-        addAdvancedWelcomeMessage();
+        
+        // Reset UI state
         generateFromAdvancedBtn.disabled = true;
         advancedChatInput.value = '';
         autoResizeTextarea(advancedChatInput);
+        advancedSendBtn.disabled = true;
+        
+        // Add welcome message
+        addAdvancedWelcomeMessage();
+        
+        // Update sidebar to remove active state
         renderConversationsList();
+        
+        // Focus input
+        setTimeout(() => {
+            advancedChatInput.focus();
+        }, 100);
     });
 }
 
-// Toggle sidebar button handler
+// Toggle sidebar button handler - with arrow rotation
 if (toggleSidebarBtn) {
     toggleSidebarBtn.addEventListener('click', () => {
         if (advancedSidebar) {
-            advancedSidebar.classList.toggle('hidden');
+            const isHidden = advancedSidebar.classList.toggle('hidden');
+            const icon = document.getElementById('sidebar-toggle-icon');
+            if (icon) {
+                // Rotate arrow: point right when sidebar is hidden, left when visible
+                icon.style.transform = isHidden ? 'rotate(0deg)' : 'rotate(180deg)';
+                icon.style.transition = 'transform 0.3s ease';
+            }
         }
     });
+    
+    // Initialize arrow direction based on sidebar state (sidebar starts visible)
+    if (advancedSidebar && !advancedSidebar.classList.contains('hidden')) {
+        const icon = document.getElementById('sidebar-toggle-icon');
+        if (icon) {
+            icon.style.transform = 'rotate(180deg)';
+        }
+    }
 }
 
 // ============================================

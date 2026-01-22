@@ -838,31 +838,42 @@ textarea:focus {
     height: 14px;
 }
 
-.advanced-sidebar-toggle-btn {
-    background: rgba(42, 46, 57, 0.6);
-    border: none;
+.advanced-sidebar-toggle-btn-middle {
+    position: absolute;
+    left: 260px; /* Position at edge of sidebar */
+    top: 50%;
+    transform: translateY(-50%) translateX(-50%);
+    z-index: 15;
+    background: rgba(42, 46, 57, 0.9);
+    border: 1px solid #2A2E39;
     color: #A3A6B4;
     cursor: pointer;
     padding: 8px;
-    width: 36px;
-    height: 36px;
+    width: 32px;
+    height: 48px;
     display: flex;
     align-items: center;
     justify-content: center;
-    border-radius: 8px;
-    transition: all 0.2s ease;
+    border-radius: 0 8px 8px 0;
+    transition: all 0.3s ease;
     backdrop-filter: blur(10px);
-    margin-right: 8px;
 }
 
-.advanced-sidebar-toggle-btn:hover {
-    background: rgba(42, 46, 57, 0.9);
+.advanced-sidebar-toggle-btn-middle:hover {
+    background: rgba(42, 46, 57, 1);
     color: #FFFFFF;
+    border-color: #3A3E49;
 }
 
-.advanced-sidebar-toggle-btn svg {
-    width: 18px;
-    height: 18px;
+.advanced-sidebar-toggle-btn-middle svg {
+    width: 16px;
+    height: 16px;
+}
+
+/* When sidebar is hidden, move arrow to left edge */
+.advanced-sidebar.hidden ~ .advanced-sidebar-toggle-btn-middle {
+    left: 0;
+    border-radius: 0 8px 8px 0;
 }
 
 /* Main chat area */
@@ -875,7 +886,7 @@ textarea:focus {
     overflow: hidden;
 }
 
-/* Minimal header - sidebar toggle and close button */
+/* Minimal header - close button only */
 .advanced-modal-header {
     display: flex;
     justify-content: flex-end;
@@ -884,7 +895,6 @@ textarea:focus {
     position: absolute;
     top: 0;
     right: 0;
-    left: 0;
     z-index: 10;
 }
 

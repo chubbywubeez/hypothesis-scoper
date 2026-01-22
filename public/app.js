@@ -1817,6 +1817,12 @@ async function sendAdvancedMessage() {
                         }
                         
                         if (data.done) {
+                            // Remove scroll listener
+                            if (currentScrollHandler) {
+                                advancedChatMessages.removeEventListener('scroll', currentScrollHandler);
+                                currentScrollHandler = null;
+                            }
+                            
                             // Replace with formatted version and add copy button
                             contentDiv.innerHTML = formatMessageContent(fullResponse);
                             

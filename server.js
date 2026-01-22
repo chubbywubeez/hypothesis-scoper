@@ -2565,11 +2565,22 @@ app.get('/api/subscription/status', async (req, res) => {
       }
     }
     
+    // Determine if user is on trial
+    let isOnTrial = false;
+    if (hasAccess && !profile?.subscription_status && profile?.trial_started_at) {
+      const trialStart = new Date(profile.trial_started_at);
+      const now = new Date();
+      const daysSinceTrialStart = (now - trialStart) / (1000 * 60 * 60 * 24);
+      isOnTrial = daysSinceTrialStart <= 3;
+    }
+    
     res.json({
       hasAccess,
       role: profile?.role || 'customer',
       subscriptionStatus: profile?.subscription_status || null,
-      subscriptionId: profile?.subscription_id || null
+      subscriptionId: profile?.subscription_id || null,
+      isOnTrial: isOnTrial,
+      trialStartedAt: profile?.trial_started_at || null
     });
     
   } catch (error) {

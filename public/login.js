@@ -97,6 +97,12 @@ if (savedToken) {
     checkAuthAndRedirect(savedToken);
 }
 
+// Show forgot password link on initial load (login mode is default)
+const forgotPasswordLink = document.getElementById('forgot-password-link');
+if (forgotPasswordLink && isLoginMode) {
+    forgotPasswordLink.style.display = 'block';
+}
+
 // Toggle between login and signup
 function switchAuthMode(isLogin) {
     isLoginMode = isLogin;
@@ -126,6 +132,11 @@ function switchAuthMode(isLogin) {
         if (termsCheckbox) {
             termsCheckbox.required = false;
             termsCheckbox.removeAttribute('required');
+        }
+        // Show forgot password link in login mode
+        const forgotPasswordLink = document.getElementById('forgot-password-link');
+        if (forgotPasswordLink) {
+            forgotPasswordLink.style.display = 'block';
         }
         // Clear password validation styling
         if (authPassword) {

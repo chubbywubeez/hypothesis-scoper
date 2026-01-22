@@ -1311,11 +1311,20 @@ textarea:focus {
         bottom: 0;
         z-index: 20;
         box-shadow: 2px 0 8px rgba(0, 0, 0, 0.3);
+        /* Auto-hide sidebar on mobile by default */
+        transform: translateX(-100%);
     }
     
-    /* Auto-hide sidebar on mobile by default */
-    .advanced-sidebar {
-        transform: translateX(-100%);
+    /* When sidebar is expanded (not hidden) on mobile, show it */
+    .advanced-sidebar:not(.hidden) {
+        transform: translateX(0);
+    }
+    
+    /* Ensure content is visible when sidebar is expanded */
+    .advanced-sidebar:not(.hidden) .advanced-sidebar-header,
+    .advanced-sidebar:not(.hidden) .advanced-sidebar-list {
+        opacity: 1;
+        pointer-events: auto;
     }
     
     .advanced-sidebar.hidden {

@@ -2532,24 +2532,43 @@ app.post('/api/auth/forgot-password', async (req, res) => {
     }
     
     // Get base URL for reset link
-    const baseUrl = process.env.BASE_URL || req.protocol + '://' + req.get('host');
+    // Use BASE_URL from env if set, otherwise construct from request
+    const baseUrl = process.env.BASE_URL || `${req.protocol}://${req.get('host')}`;
+    
+    console.log('=== PASSWORD RESET REQUEST ===');
+    console.log('Email:', email);
+    console.log('Base URL:', baseUrl);
+    console.log('Redirect URL:', `${baseUrl}/reset-password.html`);
     
     // Send password reset email using Supabase Auth
+    // Supabase will send the email automatically if email service is configured
     const { data, error } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: `${baseUrl}/reset-password.html`
     });
     
     if (error) {
-      console.error('Password reset error:', error);
-      // Don't reveal if email exists or not for security
+      console.error('❌ Password reset error:', error);
+      console.error('Error details:', JSON.stringify(error, null, 2));
+      
+      // Check if it's a configuration issue
+      if (error.message && error.message.includes('email')) {
+        console.warn('⚠️ Email sending may not be configured in Supabase. Check your Supabase dashboard → Authentication → Email Templates.');
+      }
+      
+      // Still return success message for security (don't reveal if email exists)
+      // But log the error for debugging
       return res.status(200).json({ 
-        message: 'If an account exists with this email, a password reset link has been sent.' 
+        message: 'If an account exists with this email, a password reset link has been sent. Please check your email inbox and spam folder.',
+        // Include a note about email configuration in development
+        note: process.env.NODE_ENV === 'development' ? 'Note: Make sure email is configured in Supabase Dashboard → Authentication → Email Templates and that BASE_URL is set correctly.' : undefined
       });
     }
     
+    console.log('✅ Password reset email sent successfully');
+    
     // Always return success message (security best practice - don't reveal if email exists)
     res.json({ 
-      message: 'If an account exists with this email, a password reset link has been sent.' 
+      message: 'If an account exists with this email, a password reset link has been sent. Please check your email inbox and spam folder.'
     });
     
   } catch (error) {
@@ -2561,11 +2580,18 @@ app.post('/api/auth/forgot-password', async (req, res) => {
 // Reset password endpoint - updates password with token
 app.post('/api/auth/reset-password', async (req, res) => {
   try {
-    const { password, token } = req.body;
+    const { password } = req.body;
+    const authHeader = req.headers.authorization;
     
-    if (!password || !token) {
-      return res.status(400).json({ error: 'Password and token are required' });
+    if (!password) {
+      return res.status(400).json({ error: 'Password is required' });
     }
+    
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'Authentication token required' });
+    }
+    
+    const token = authHeader.substring(7);
     
     // Validate password requirements
     const passwordErrors = [];
@@ -2592,14 +2618,21 @@ app.post('/api/auth/reset-password', async (req, res) => {
       return res.status(500).json({ error: 'Supabase not configured' });
     }
     
-    // Update password using the session token
-    const { data, error } = await supabase.auth.updateUser({
+    // Verify token and get user
+    const { data: { user }, error: userError } = await supabase.auth.getUser(token);
+    
+    if (userError || !user) {
+      return res.status(401).json({ error: 'Invalid or expired reset token' });
+    }
+    
+    // Update password using admin API with the user's ID
+    const { error: updateError } = await supabase.auth.admin.updateUserById(user.id, {
       password: password
     });
     
-    if (error) {
-      console.error('Password reset error:', error);
-      return res.status(400).json({ error: 'Invalid or expired reset token' });
+    if (updateError) {
+      console.error('Password reset error:', updateError);
+      return res.status(400).json({ error: 'Failed to update password: ' + updateError.message });
     }
     
     res.json({ 

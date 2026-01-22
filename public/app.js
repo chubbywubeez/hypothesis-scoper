@@ -464,6 +464,8 @@ const paymentUpgradeBtn = document.getElementById('payment-upgrade-btn');
 let advancedConversationHistory = [];
 let currentConversationId = null; // Track which conversation is currently loaded
 let allConversations = []; // Store all conversations for sidebar
+let userHasScrolledUp = false; // Track if user manually scrolled up during streaming
+let currentScrollHandler = null; // Track scroll handler for cleanup
 
 // Progress bar elements
 const hypothesisProgressBar = document.getElementById('hypothesis-progress-bar');
@@ -1340,6 +1342,15 @@ async function openAdvancedModal() {
     advancedModal.style.display = 'flex';
     advancedModal.classList.add('show');
     
+    // Auto-hide sidebar on mobile
+    if (window.innerWidth <= 768 && advancedSidebar) {
+        advancedSidebar.classList.add('hidden');
+        const icon = document.getElementById('sidebar-toggle-icon');
+        if (icon) {
+            icon.style.transform = 'rotate(0deg)';
+        }
+    }
+    
     // Load conversations list
     await loadConversations();
     
@@ -1506,6 +1517,11 @@ function formatMessageContent(content) {
                     .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
                     // Inline code (`code`)
                     .replace(/`([^`]+)`/g, '<code>$1</code>');
+            }
+            
+            // Wrap non-empty lines in paragraphs if they're not headers or code
+            if (processedLine.trim() && !processedLine.match(/^<h[1-6]|^<ul|^<\/ul|^<ol|^<\/ol|^<li|^<pre|^<\/pre|^<code|^<\/code/)) {
+                processedLine = `<p>${processedLine}</p>`;
             }
             
             processedLines.push(processedLine);
@@ -1743,6 +1759,22 @@ async function sendAdvancedMessage() {
         assistantDiv.appendChild(contentDiv);
         advancedChatMessages.appendChild(assistantDiv);
         
+        // Reset scroll tracking for new message
+        userHasScrolledUp = false;
+        
+        // Track user scroll behavior - if they scroll up, disable auto-scroll
+        const handleScroll = () => {
+            const isNearBottom = advancedChatMessages.scrollHeight - advancedChatMessages.scrollTop - advancedChatMessages.clientHeight < 50;
+            if (!isNearBottom) {
+                userHasScrolledUp = true; // User scrolled up, disable auto-scroll
+            } else {
+                userHasScrolledUp = false; // User scrolled back to bottom, re-enable auto-scroll
+            }
+        };
+        
+        advancedChatMessages.addEventListener('scroll', handleScroll, { passive: true });
+        currentScrollHandler = handleScroll; // Store for cleanup
+        
         while (true) {
             const { done, value } = await reader.read();
             
@@ -1767,15 +1799,20 @@ async function sendAdvancedMessage() {
                             // Apply formatting during streaming (not just at the end)
                             contentDiv.innerHTML = formatMessageContent(fullResponse);
                             
-                            // Only auto-scroll if user is already near the bottom (within 50px)
+                            // Only auto-scroll if user hasn't manually scrolled up AND is near the bottom
                             // This allows users to scroll up and read at their own pace
-                            const isNearBottom = advancedChatMessages.scrollHeight - advancedChatMessages.scrollTop - advancedChatMessages.clientHeight < 50;
-                            
-                            if (isNearBottom) {
-                                // Use requestAnimationFrame for smoother scrolling
-                                requestAnimationFrame(() => {
-                                    advancedChatMessages.scrollTop = advancedChatMessages.scrollHeight;
-                                });
+                            if (!userHasScrolledUp) {
+                                const isNearBottom = advancedChatMessages.scrollHeight - advancedChatMessages.scrollTop - advancedChatMessages.clientHeight < 50;
+                                
+                                if (isNearBottom) {
+                                    // Use requestAnimationFrame for smoother scrolling
+                                    requestAnimationFrame(() => {
+                                        advancedChatMessages.scrollTop = advancedChatMessages.scrollHeight;
+                                    });
+                                } else {
+                                    // User scrolled away from bottom, disable auto-scroll
+                                    userHasScrolledUp = true;
+                                }
                             }
                         }
                         

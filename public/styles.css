@@ -1313,8 +1313,23 @@ textarea:focus {
         box-shadow: 2px 0 8px rgba(0, 0, 0, 0.3);
     }
     
+    /* Auto-hide sidebar on mobile by default */
+    .advanced-sidebar {
+        transform: translateX(-100%);
+    }
+    
     .advanced-sidebar.hidden {
         transform: translateX(-100%);
+    }
+    
+    /* Fix z-index for toggle button on mobile - make sure it's above sidebar */
+    .advanced-sidebar-toggle-btn-middle {
+        z-index: 25;
+    }
+    
+    /* When sidebar is expanded on mobile, move toggle button */
+    .advanced-sidebar:not(.hidden) ~ .advanced-sidebar-toggle-btn-middle {
+        left: 260px;
     }
     
     .advanced-chat-messages {

@@ -6,6 +6,7 @@ const cors = require('cors');
 const OpenAI = require('openai');
 const https = require('https');
 const { createClient } = require('@supabase/supabase-js');
+const { Resend } = require('resend');
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 require('dotenv').config();
 
@@ -592,6 +593,14 @@ if (process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY) {
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
 });
+
+// Initialize Resend client for sending emails
+const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
+if (resend) {
+  console.log('Resend client initialized');
+} else {
+  console.warn('WARNING: RESEND_API_KEY not set. Password reset emails will not work.');
+}
 
 // Prompt DSL: Hypothesis + Scope prompts are now built from reusable sections.
 // This keeps server.js smaller and makes prompt editing safer.
@@ -2518,7 +2527,7 @@ app.post('/api/auth/refresh', async (req, res) => {
   }
 });
 
-// Forgot password endpoint - sends password reset email
+// Forgot password endpoint - sends password reset email using Resend
 app.post('/api/auth/forgot-password', async (req, res) => {
   try {
     const { email } = req.body;
@@ -2531,40 +2540,143 @@ app.post('/api/auth/forgot-password', async (req, res) => {
       return res.status(500).json({ error: 'Supabase not configured' });
     }
     
+    if (!resend) {
+      return res.status(500).json({ error: 'Email service not configured. RESEND_API_KEY is required.' });
+    }
+    
     // Get base URL for reset link
     // Use BASE_URL from env if set, otherwise construct from request
+    // IMPORTANT: BASE_URL must be set in Railway environment variables to your production URL
+    // Example: BASE_URL=https://your-app.railway.app
+    // The redirect URL must also be added to Supabase Dashboard → Authentication → URL Configuration
     const baseUrl = process.env.BASE_URL || `${req.protocol}://${req.get('host')}`;
+    const redirectUrl = `${baseUrl}/reset-password.html`;
     
     console.log('=== PASSWORD RESET REQUEST ===');
     console.log('Email:', email);
     console.log('Base URL:', baseUrl);
-    console.log('Redirect URL:', `${baseUrl}/reset-password.html`);
+    console.log('Redirect URL:', redirectUrl);
+    console.log('⚠️ Make sure this redirect URL is added to Supabase Dashboard → Authentication → URL Configuration');
     
-    // Send password reset email using Supabase Auth
-    // Supabase will send the email automatically if email service is configured
-    const { data, error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${baseUrl}/reset-password.html`
+    // Generate password reset link using Supabase Admin API
+    // This generates a recovery token without sending an email
+    const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
+      type: 'recovery',
+      email: email,
+      options: {
+        redirectTo: redirectUrl
+      }
     });
     
-    if (error) {
-      console.error('❌ Password reset error:', error);
-      console.error('Error details:', JSON.stringify(error, null, 2));
+    // If user doesn't exist, still return success (security best practice)
+    if (linkError) {
+      console.error('❌ Password reset link generation error:', linkError);
       
-      // Check if it's a configuration issue
-      if (error.message && error.message.includes('email')) {
-        console.warn('⚠️ Email sending may not be configured in Supabase. Check your Supabase dashboard → Authentication → Email Templates.');
+      // Check if user doesn't exist (common case)
+      if (linkError.message && linkError.message.includes('User not found')) {
+        // Still return success message for security (don't reveal if email exists)
+        return res.json({ 
+          message: 'If an account exists with this email, a password reset link has been sent. Please check your email inbox and spam folder.'
+        });
       }
       
-      // Still return success message for security (don't reveal if email exists)
-      // But log the error for debugging
-      return res.status(200).json({ 
-        message: 'If an account exists with this email, a password reset link has been sent. Please check your email inbox and spam folder.',
-        // Include a note about email configuration in development
-        note: process.env.NODE_ENV === 'development' ? 'Note: Make sure email is configured in Supabase Dashboard → Authentication → Email Templates and that BASE_URL is set correctly.' : undefined
+      // For other errors, still return success but log the error
+      return res.json({ 
+        message: 'If an account exists with this email, a password reset link has been sent. Please check your email inbox and spam folder.'
       });
     }
     
-    console.log('✅ Password reset email sent successfully');
+    // Extract the recovery link from the response
+    // Supabase generateLink returns action_link which is already formatted correctly
+    // Format: {redirectUrl}#access_token=...&type=recovery
+    // The response structure is: { data: { properties: { action_link: "..." } } }
+    const resetUrl = linkData?.properties?.action_link || linkData?.action_link;
+    
+    if (!resetUrl) {
+      console.error('❌ No reset link generated');
+      console.error('Link data:', JSON.stringify(linkData, null, 2));
+      // Still return success message for security
+      return res.json({ 
+        message: 'If an account exists with this email, a password reset link has been sent. Please check your email inbox and spam folder.'
+      });
+    }
+    
+    console.log('Reset URL generated:', resetUrl.substring(0, 100) + '...');
+    
+    // Determine sender email - use custom domain if verified, otherwise fallback to Resend's default
+    // For testing, you can use 'onboarding@resend.dev' (Resend's default domain)
+    // Once getvantum.com is fully verified, use 'info@getvantum.com'
+    const senderEmail = process.env.RESEND_FROM_EMAIL || 'info@getvantum.com';
+    
+    console.log('Using sender email:', senderEmail);
+    
+    // Send email using Resend
+    const { data: emailData, error: emailError } = await resend.emails.send({
+      from: senderEmail,
+      to: email,
+      subject: 'Reset Your Password - Vantum Action Planner',
+      html: `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="UTF-8">
+          <style>
+            body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; }
+            .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+            .header { text-align: center; margin-bottom: 30px; }
+            .button { display: inline-block; padding: 12px 24px; background-color: #007A7A; color: #FFFFFF; text-decoration: none; border-radius: 6px; font-weight: 600; margin: 20px 0; }
+            .button:hover { background-color: #009999; }
+            .footer { margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; font-size: 12px; color: #666; text-align: center; }
+            .link { color: #007A7A; word-break: break-all; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="header">
+              <h1>Reset Your Password</h1>
+            </div>
+            <p>You requested to reset your password for your Vantum Action Planner account.</p>
+            <p>Click the button below to reset your password:</p>
+            <div style="text-align: center;">
+              <a href="${resetUrl}" class="button">Reset Password</a>
+            </div>
+            <p>Or copy and paste this link into your browser:</p>
+            <p><a href="${resetUrl}" class="link">${resetUrl}</a></p>
+            <p><strong>This link will expire in 1 hour.</strong></p>
+            <p>If you didn't request a password reset, you can safely ignore this email.</p>
+            <div class="footer">
+              <p>© ${new Date().getFullYear()} Vantum Action Planner. All rights reserved.</p>
+            </div>
+          </div>
+        </body>
+        </html>
+      `,
+      text: `
+Reset Your Password
+
+You requested to reset your password for your Vantum Action Planner account.
+
+Click the link below to reset your password:
+${resetUrl}
+
+This link will expire in 1 hour.
+
+If you didn't request a password reset, you can safely ignore this email.
+
+© ${new Date().getFullYear()} Vantum Action Planner. All rights reserved.
+      `
+    });
+    
+    if (emailError) {
+      console.error('❌ Resend email error:', emailError);
+      // Still return success message for security
+      return res.json({ 
+        message: 'If an account exists with this email, a password reset link has been sent. Please check your email inbox and spam folder.'
+      });
+    }
+    
+    console.log('✅ Password reset email sent successfully via Resend');
+    console.log('Email ID:', emailData?.id);
     
     // Always return success message (security best practice - don't reveal if email exists)
     res.json({ 
@@ -2573,7 +2685,10 @@ app.post('/api/auth/forgot-password', async (req, res) => {
     
   } catch (error) {
     console.error('Forgot password error:', error);
-    res.status(500).json({ error: 'Failed to process password reset request' });
+    // Still return success message for security
+    res.json({ 
+      message: 'If an account exists with this email, a password reset link has been sent. Please check your email inbox and spam folder.'
+    });
   }
 });
 

@@ -71,6 +71,18 @@ app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async
         console.log('Subscription ID:', subscriptionId);
         console.log('Customer email:', customerEmail);
         
+        // Get actual subscription status from Stripe (to handle 'trialing' status)
+        let subscriptionStatus = 'active'; // Default
+        if (subscriptionId && process.env.STRIPE_SECRET_KEY) {
+          try {
+            const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+            subscriptionStatus = subscription.status; // Can be 'trialing', 'active', etc.
+            console.log('Subscription status from Stripe:', subscriptionStatus);
+          } catch (err) {
+            console.warn('Could not retrieve subscription from Stripe:', err.message);
+          }
+        }
+        
         // First, check if the profile exists
         const { data: existingProfile, error: readError } = await supabase
           .from('profiles')
@@ -99,11 +111,14 @@ app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async
               console.log('✅ User exists in auth.users:', authUser.user.email);
               
               // Create the profile
+              // Map Stripe status: 'trialing' or 'active' both grant access
+              const dbStatus = (subscriptionStatus === 'trialing' || subscriptionStatus === 'active') ? 'active' : 'inactive';
+              
               const profileData = {
                 id: userId,
                 email: customerEmail || authUser.user.email || 'unknown@example.com',
                 role: 'customer',
-                subscription_status: 'active',
+                subscription_status: dbStatus,
                 subscription_id: subscriptionId,
                 subscription_started_at: new Date().toISOString(),
                 subscription_updated_at: new Date().toISOString(),
@@ -140,11 +155,14 @@ app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async
           console.log('Current profile:', JSON.stringify(existingProfile, null, 2));
         
         // Update user profile with subscription info
+          // Map Stripe status: 'trialing' or 'active' both grant access
+          const dbStatus = (subscriptionStatus === 'trialing' || subscriptionStatus === 'active') ? 'active' : 'inactive';
+          
           // Do UPDATE without .select() first, then verify separately
           const { error } = await supabase
           .from('profiles')
           .update({
-            subscription_status: 'active',
+            subscription_status: dbStatus,
             subscription_id: subscriptionId,
               subscription_started_at: existingProfile.subscription_started_at || new Date().toISOString(),
               subscription_updated_at: new Date().toISOString()

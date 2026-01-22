@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Settings - Vantum Action Planner</title>
+    <link rel="icon" type="image/png" href="/vantum-logo.png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <base href="/">
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        html {
+            font-size: 16px;
+        }
+        
+        .settings-container {
+            max-width: 600px;
+            margin: 40px auto;
+            padding: 0 20px;
+        }
+        
+        .settings-header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+        
+        .settings-header h1 {
+            margin: 0 0 10px 0;
+            color: #FFFFFF;
+        }
+        
+        .settings-header p {
+            color: #A3A6B4;
+            margin: 0;
+        }
+        
+        .settings-section {
+            background: #1A1E29;
+            border: 1px solid #2A2E39;
+            border-radius: 8px;
+            padding: 24px;
+            margin-bottom: 20px;
+        }
+        
+        .settings-section h2 {
+            margin: 0 0 20px 0;
+            color: #FFFFFF;
+            font-size: 1.25em;
+        }
+        
+        .settings-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 0;
+            border-bottom: 1px solid #2A2E39;
+        }
+        
+        .settings-item:last-child {
+            border-bottom: none;
+        }
+        
+        .settings-item-label {
+            flex: 1;
+        }
+        
+        .settings-item-label strong {
+            display: block;
+            color: #FFFFFF;
+            margin-bottom: 4px;
+        }
+        
+        .settings-item-label small {
+            color: #A3A6B4;
+            font-size: 0.875em;
+        }
+        
+        .settings-item-action {
+            margin-left: 20px;
+        }
+        
+        .status-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 0.875em;
+            font-weight: 600;
+        }
+        
+        .status-badge.active {
+            background: #2d5016;
+            color: #90ee90;
+        }
+        
+        .status-badge.inactive {
+            background: #5a1a1a;
+            color: #ff6b6b;
+        }
+        
+        .status-badge.trial {
+            background: #3d3d1a;
+            color: #ffd700;
+        }
+        
+        .btn-link {
+            color: #3498db;
+            text-decoration: none;
+            font-size: 0.875em;
+            font-weight: 500;
+        }
+        
+        .btn-link:hover {
+            text-decoration: underline;
+        }
+        
+        .settings-status {
+            padding: 12px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            display: none;
+        }
+        
+        .settings-status.success {
+            background: #2d5016;
+            color: #90ee90;
+            border: 1px solid #4a7c2a;
+        }
+        
+        .settings-status.error {
+            background: #5a1a1a;
+            color: #ff6b6b;
+            border: 1px solid #8b2a2a;
+        }
+        
+        .back-link {
+            text-align: center;
+            margin-top: 30px;
+        }
+        
+        .back-link a {
+            color: #3498db;
+            text-decoration: none;
+        }
+        
+        .back-link a:hover {
+            text-decoration: underline;
+        }
+        
+        @media (max-width: 768px) {
+            .settings-container {
+                margin: 20px auto;
+                padding: 0 15px;
+            }
+            
+            .settings-item {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+            
+            .settings-item-action {
+                margin-left: 0;
+                margin-top: 12px;
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="settings-container">
+            <div class="settings-header">
+                <h1>Settings</h1>
+                <p>Manage your account and subscription</p>
+            </div>
+
+            <!-- Status messages -->
+            <div id="settings-status" class="settings-status"></div>
+
+            <!-- Account Section -->
+            <div class="settings-section">
+                <h2>Account</h2>
+                
+                <div class="settings-item">
+                    <div class="settings-item-label">
+                        <strong>Email</strong>
+                        <small id="user-email-display">Loading...</small>
+                    </div>
+                </div>
+                
+                <div class="settings-item">
+                    <div class="settings-item-label">
+                        <strong>Password</strong>
+                        <small>Change your password</small>
+                    </div>
+                    <div class="settings-item-action">
+                        <a href="/forgot-password.html" class="btn-link">Reset Password</a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Subscription Section -->
+            <div class="settings-section">
+                <h2>Subscription</h2>
+                
+                <div class="settings-item">
+                    <div class="settings-item-label">
+                        <strong>Status</strong>
+                        <small id="subscription-status-text">Loading...</small>
+                    </div>
+                    <div class="settings-item-action">
+                        <span id="subscription-badge" class="status-badge">Loading...</span>
+                    </div>
+                </div>
+                
+                <div class="settings-item" id="subscription-action-item" style="display: none;">
+                    <div class="settings-item-label">
+                        <strong id="subscription-action-label">Manage Subscription</strong>
+                        <small id="subscription-action-desc"></small>
+                    </div>
+                    <div class="settings-item-action">
+                        <button id="subscription-action-btn" class="btn btn-primary btn-small">Action</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Actions Section -->
+            <div class="settings-section">
+                <h2>Actions</h2>
+                
+                <div class="settings-item">
+                    <div class="settings-item-label">
+                        <strong>Sign Out</strong>
+                        <small>Sign out of your account</small>
+                    </div>
+                    <div class="settings-item-action">
+                        <button id="logout-btn" class="btn btn-secondary btn-small">Sign Out</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="back-link">
+                <a href="/index.html">← Back to App</a>
+            </div>
+        </div>
+    </div>
+
+    <script src="settings.js"></script>
+</body>
+</html>

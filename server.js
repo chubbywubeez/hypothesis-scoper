@@ -2587,10 +2587,10 @@ app.post('/api/auth/forgot-password', async (req, res) => {
     }
     
     // Extract the recovery link from the response
-    // Supabase generateLink returns action_link which is already formatted correctly
-    // Format: {redirectUrl}#access_token=...&type=recovery
+    // Supabase generateLink returns action_link which may not include the full path
+    // We need to ensure it includes /reset-password.html
     // The response structure is: { data: { properties: { action_link: "..." } } }
-    const resetUrl = linkData?.properties?.action_link || linkData?.action_link;
+    let resetUrl = linkData?.properties?.action_link || linkData?.action_link;
     
     if (!resetUrl) {
       console.error('❌ No reset link generated');
@@ -2601,7 +2601,33 @@ app.post('/api/auth/forgot-password', async (req, res) => {
       });
     }
     
-    console.log('Reset URL generated:', resetUrl.substring(0, 100) + '...');
+    // Ensure the URL includes /reset-password.html in the path
+    // Supabase might return just the base URL with hash, so we need to insert the path
+    try {
+      const url = new URL(resetUrl);
+      const hash = url.hash; // Save the hash (#access_token=...)
+      
+      // Check if pathname already includes reset-password.html
+      if (!url.pathname.includes('reset-password.html')) {
+        // Set the pathname to /reset-password.html and restore the hash
+        url.pathname = '/reset-password.html';
+        resetUrl = url.toString();
+      }
+    } catch (e) {
+      // If URL parsing fails, try to manually fix it
+      // Check if it's just a base URL with hash (like http://localhost:3000/#access_token=...)
+      if (resetUrl.includes('#') && !resetUrl.includes('reset-password.html')) {
+        const hashIndex = resetUrl.indexOf('#');
+        const baseUrl = resetUrl.substring(0, hashIndex);
+        const hash = resetUrl.substring(hashIndex);
+        
+        // Ensure base URL doesn't have trailing slash, then add path
+        const cleanBaseUrl = baseUrl.replace(/\/$/, '');
+        resetUrl = `${cleanBaseUrl}/reset-password.html${hash}`;
+      }
+    }
+    
+    console.log('Reset URL generated:', resetUrl.substring(0, 150) + '...');
     
     // Determine sender email - use custom domain if verified, otherwise fallback to Resend's default
     // For testing, you can use 'onboarding@resend.dev' (Resend's default domain)
@@ -3144,6 +3170,82 @@ app.post('/api/stripe/create-checkout-session', async (req, res) => {
   } catch (error) {
     console.error('Create checkout session error:', error);
     res.status(500).json({ error: 'Failed to create checkout session' });
+  }
+});
+
+// Cancel subscription endpoint
+app.post('/api/subscription/cancel', async (req, res) => {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+    
+    const token = authHeader.substring(7);
+    
+    if (!supabase) {
+      return res.status(500).json({ error: 'Supabase not configured' });
+    }
+    
+    if (!process.env.STRIPE_SECRET_KEY) {
+      return res.status(500).json({ error: 'Stripe not configured' });
+    }
+    
+    // Verify token and get user
+    const { data: { user }, error: userError } = await supabase.auth.getUser(token);
+    
+    if (userError || !user) {
+      return res.status(401).json({ error: 'Invalid or expired token' });
+    }
+    
+    // Get user profile with subscription info
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('email, role, subscription_id')
+      .eq('id', user.id)
+      .single();
+    
+    if (!profile) {
+      return res.status(404).json({ error: 'User profile not found' });
+    }
+    
+    // Internal users can't cancel (they have free access)
+    if (profile.role === 'internal') {
+      return res.status(400).json({ error: 'Internal users cannot cancel subscription' });
+    }
+    
+    // Check if user has an active subscription
+    if (!profile.subscription_id) {
+      return res.status(400).json({ error: 'No active subscription found' });
+    }
+    
+    // Cancel subscription in Stripe
+    // This will cancel at the end of the billing period (not immediately)
+    const subscription = await stripe.subscriptions.update(profile.subscription_id, {
+      cancel_at_period_end: true
+    });
+    
+    console.log('✅ Subscription cancellation scheduled');
+    console.log('Subscription ID:', subscription.id);
+    console.log('Will cancel at period end:', subscription.cancel_at_period_end);
+    console.log('Current period end:', new Date(subscription.current_period_end * 1000).toISOString());
+    
+    res.json({
+      success: true,
+      message: 'Subscription will be canceled at the end of your billing period',
+      cancel_at_period_end: subscription.cancel_at_period_end,
+      current_period_end: subscription.current_period_end
+    });
+    
+  } catch (error) {
+    console.error('Cancel subscription error:', error);
+    
+    // Handle specific Stripe errors
+    if (error.type === 'StripeInvalidRequestError') {
+      return res.status(400).json({ error: error.message || 'Invalid subscription' });
+    }
+    
+    res.status(500).json({ error: 'Failed to cancel subscription', details: error.message });
   }
 });
 

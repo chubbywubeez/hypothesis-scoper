@@ -2532,6 +2532,12 @@ function updateUIForAuth() {
         }
         if (myScopesBtn) myScopesBtn.style.display = 'inline-block';
         
+        // Show Settings button for all logged-in users
+        const settingsBtn = document.getElementById('settings-btn');
+        if (settingsBtn) {
+            settingsBtn.style.display = 'inline-block';
+        }
+        
         // Show Admin Dashboard button for internal users
         const adminDashboardBtn = document.getElementById('admin-dashboard-btn');
         if (adminDashboardBtn) {

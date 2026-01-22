@@ -2717,8 +2717,12 @@ app.post('/api/subscription/sync', async (req, res) => {
     // Update profile with subscription info
     // Map Stripe status: 'trialing' or 'active' both grant access
     const status = (subscription.status === 'trialing' || subscription.status === 'active') ? 'active' : 'inactive';
+    console.log('=== SYNC SUBSCRIPTION DETAILS ===');
+    console.log('Subscription ID:', subscription.id);
     console.log('Subscription status from Stripe:', subscription.status);
     console.log('Mapped to db status:', status);
+    console.log('User ID:', user.id);
+    console.log('Current profile subscription_id:', profile.subscription_id);
     
     const { data: updatedProfile, error: updateError } = await supabase
       .from('profiles')
@@ -2733,11 +2737,20 @@ app.post('/api/subscription/sync', async (req, res) => {
     
     if (updateError) {
       console.error('❌ Error updating profile:', updateError);
+      console.error('Error code:', updateError.code);
+      console.error('Error message:', updateError.message);
+      console.error('Error details:', updateError.details);
       return res.status(500).json({ error: 'Failed to update subscription status', details: updateError.message });
     }
     
+    if (!updatedProfile || updatedProfile.length === 0) {
+      console.error('❌ Update returned no rows - RLS may be blocking');
+      return res.status(500).json({ error: 'Update completed but no rows returned - RLS may be blocking' });
+    }
+    
     console.log('✅ Subscription synced successfully');
-    console.log('Updated profile:', updatedProfile);
+    console.log('Updated profile subscription_status:', updatedProfile[0]?.subscription_status);
+    console.log('Updated profile subscription_id:', updatedProfile[0]?.subscription_id);
     
     res.json({
       success: true,

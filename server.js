@@ -235,7 +235,8 @@ app.post('/api/stripe/webhook', express.raw({ type: 'application/json' }), async
         if (profiles && profiles.length > 0) {
           const userId = profiles[0].id;
           const userEmail = profiles[0].email;
-          const status = subscription.status === 'active' ? 'active' : 'inactive';
+          // Map Stripe status: 'trialing' or 'active' both grant access
+          const status = (subscription.status === 'trialing' || subscription.status === 'active') ? 'active' : 'inactive';
           
           console.log(`✅ Found user by subscription ID: ${userId} (${userEmail})`);
           console.log(`Updating subscription status to: ${status}`);
